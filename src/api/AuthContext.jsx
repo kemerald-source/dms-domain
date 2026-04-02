@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 
 const AuthContext = createContext(null);
 
@@ -76,7 +76,6 @@ function normalizeUser(netlifyUser) {
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
-  const onLoginCallbackRef = useRef(null);
 
   useEffect(() => {
     loadIdentityWidget().then((identity) => {
@@ -89,14 +88,6 @@ export function AuthProvider({ children }) {
         if (initUser) {
           setUser(normalizeUser(initUser));
           cleanupIdentityWidget();
-          // Handle post-login redirect
-          try {
-            const redirect = sessionStorage.getItem('dmd_post_login_redirect');
-            if (redirect) {
-              sessionStorage.removeItem('dmd_post_login_redirect');
-              setTimeout(() => { window.location.href = redirect; }, 300);
-            }
-          } catch { /* sessionStorage not available */ }
         }
         setLoading(false);
       });
@@ -105,12 +96,6 @@ export function AuthProvider({ children }) {
         setUser(normalizeUser(loginUser));
         identity.close();
         cleanupIdentityWidget();
-
-        if (onLoginCallbackRef.current) {
-          const cb = onLoginCallbackRef.current;
-          onLoginCallbackRef.current = null;
-          cb(normalizeUser(loginUser));
-        }
 
         if (window.innerWidth < 1024) {
           setTimeout(() => window.location.reload(), 500);
@@ -124,15 +109,7 @@ export function AuthProvider({ children }) {
     });
   }, []);
 
-  const login = (callback) => {
-    if (callback) {
-      try {
-        const match = callback.toString().match(/navigate\(['"]([^'"]+)['"]\)/);
-        if (match) sessionStorage.setItem('dmd_post_login_redirect', match[1]);
-        else sessionStorage.setItem('dmd_post_login_redirect', '/dashboard');
-      } catch { /* ok */ }
-      onLoginCallbackRef.current = callback;
-    }
+  const login = () => {
     window.location.href = '/.netlify/identity/authorize?provider=google&prompt=select_account';
   };
 
