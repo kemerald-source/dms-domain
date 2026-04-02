@@ -1,0 +1,59 @@
+@import "tailwindcss";
+
+@theme {
+  /* EG4H Shell */
+  --color-eg4h-black: #0A0A0A;
+  --color-eg4h-gold: #FFD700;
+  --color-eg4h-gold-dark: #C8943E;
+  --color-eg4h-gold-light: #FFED4A;
+
+  /* Domain Interior — darker, more ominous than CE's tavern */
+  --color-domain-bg: #080808;
+  --color-domain-dark: #111111;
+  --color-domain-mid: #1A1A1A;
+  --color-domain-warm: #2A2018;
+  --color-domain-amber: #C8943E;
+  --color-domain-ember: #E8A020;
+  --color-domain-parchment: #F5E6C8;
+  --color-domain-parchment-dark: #D4B896;
+  --color-domain-text: #E8DCC8;
+  --color-domain-text-dim: #9C8B72;
+
+  /* Fonts */
+  --font-display: "Georgia", serif;
+  --font-body: "Georgia", serif;
+  --font-ui: system-ui, sans-serif;
+  --font-cinzel-decorative: "Cinzel Decorative", serif;
+  --font-cinzel: "Cinzel", serif;
+  --font-crimson: "Crimson Text", serif;
+}
+
+body {
+  margin: 0;
+  background-color: #080808;
+  color: #E8DCC8;
+  font-family: "Georgia", serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #111111;
+}
+::-webkit-scrollbar-thumb {
+  background: #C8943E;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #FFD700;
+}
+
+.text-gold-gradient {
+  background: linear-gradient(135deg, #FFD700 0%, #FFA500 25%, #FFD700 50%, #FFED4A 75%, #FFD700 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
