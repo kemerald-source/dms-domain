@@ -54,7 +54,7 @@ body {
   pointer-events: none;
   z-index: 0;
   background:
-    url('/bg-dmdscreen.png') center / cover no-repeat fixed;
+    url('/bg-dmdscreen3.png') center / cover no-repeat fixed;
 }
 .dm-study-bg::after {
   content: '';
