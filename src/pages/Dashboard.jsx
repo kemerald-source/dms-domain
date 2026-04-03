@@ -271,6 +271,7 @@ export default function Dashboard() {
                 initial={{ opacity: 0, y: 15 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.05 }}
+                onClick={() => navigate(`/campaign/${campaign.id}/session`)}
               >
                 <div className="flex items-start justify-between">
                   <div className="flex-1 min-w-0">
