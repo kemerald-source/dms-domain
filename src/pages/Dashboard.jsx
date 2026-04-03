@@ -40,13 +40,33 @@ export default function Dashboard() {
 
       if (campaignErr) console.error('Error fetching campaigns:', campaignErr);
 
-      // Fetch parties this user DMs
-      const { data: partyData, error: partyErr } = await supabase
+      // Fetch parties this user DMs — match on email OR on linked campaign party_ids
+      // (handles CE parties where dm_email may differ from OAuth login email)
+      const campaignPartyIds = (campaignData || [])
+        .map(c => c.party_id)
+        .filter(Boolean);
+
+      const { data: partyByEmail, error: partyErr } = await supabase
         .from('parties')
         .select('*')
         .eq('dm_email', user.email);
 
       if (partyErr) console.error('Error fetching parties:', partyErr);
+
+      let partyData = partyByEmail || [];
+
+      // Also fetch parties linked to the user's campaigns (cross-app email mismatch)
+      if (campaignPartyIds.length > 0) {
+        const knownIds = new Set(partyData.map(p => p.id));
+        const missing = campaignPartyIds.filter(id => !knownIds.has(id));
+        if (missing.length > 0) {
+          const { data: linkedParties } = await supabase
+            .from('parties')
+            .select('*')
+            .in('id', missing);
+          if (linkedParties) partyData = [...partyData, ...linkedParties];
+        }
+      }
 
       // For each campaign with a party_id, get the party name
       const partyMap = {};

@@ -56,6 +56,50 @@ const URGENCY_COLORS = {
   critical: 'border-red-800/50',
 };
 
+// ─── Extract stats from CE character_data ───────────────────
+function parseCharStats(cd) {
+  if (!cd) return { name: 'Unknown', charClass: '', level: '', ac: '—', hp: '—', maxHp: '', pp: null };
+
+  const name = cd.name || cd.characterName || 'Unknown';
+  const charClass = cd.class || cd.className || '';
+  const level = cd.level || '';
+
+  // Ability scores — CE uses abilityScores (with racial bonuses applied)
+  const scores = cd.abilityScores || cd.abilities || cd.baseScores || {};
+  const dexMod = scores.dex ? Math.floor((scores.dex - 10) / 2) : 0;
+  const conMod = scores.con ? Math.floor((scores.con - 10) / 2) : 0;
+  const wisMod = scores.wis ? Math.floor((scores.wis - 10) / 2) : 0;
+
+  // HP — CE stores currentHp (nullable) and derives max from class hit die + con
+  const hitDice = { barbarian: 12, fighter: 10, paladin: 10, ranger: 10, bard: 8, cleric: 8, druid: 8, monk: 8, rogue: 8, warlock: 8, sorcerer: 6, wizard: 6 };
+  const die = hitDice[charClass.toLowerCase()] || 8;
+  const baseMaxHp = die + conMod; // level 1: max die + CON mod
+  const lvl = parseInt(level) || 1;
+  // Levels beyond 1: average roll + CON mod per level
+  const maxHp = cd.maxHp ?? (baseMaxHp + (lvl > 1 ? (lvl - 1) * (Math.floor(die / 2) + 1 + conMod) : 0));
+  const hp = cd.currentHp ?? maxHp;
+
+  // AC — check for explicit value, then estimate from equipment/class
+  let ac = cd.ac ?? cd.armorClass ?? null;
+  if (ac == null) {
+    // Base 10 + DEX for unarmored; if wearing heavy armor (chain mail for fighters), DEX doesn't apply
+    // Simple heuristic: check equipped items for known armors
+    ac = 10 + dexMod; // default unarmored
+    if (cd.equippedItems && cd.equipmentSelections !== undefined) {
+      // Fighter with chain mail = AC 16 (no DEX)
+      const cls = charClass.toLowerCase();
+      if (['fighter', 'paladin'].includes(cls)) ac = Math.max(ac, 16);
+      else if (['cleric', 'ranger'].includes(cls)) ac = Math.max(ac, 14 + Math.min(dexMod, 2));
+      else if (cls === 'barbarian') ac = 10 + dexMod + conMod;
+      else if (cls === 'monk') ac = 10 + dexMod + wisMod;
+    }
+  }
+
+  const pp = scores.wis ? 10 + wisMod : null;
+
+  return { name, charClass, level, ac, hp, maxHp, pp, dexMod, scores };
+}
+
 // ═════════════════════════════════════════════════════════════════
 // MAIN COMPONENT
 // ═════════════════════════════════════════════════════════════════
@@ -125,7 +169,7 @@ export default function SessionView() {
       setLore(loreRes.data || []);
       setSessionNotes(noteRes.data || []);
 
-      // Party members with character data
+      // Party members with character data — exclude DM entries
       if (camp.party_id) {
         const { data: members } = await supabase
           .from('party_members')
@@ -133,19 +177,23 @@ export default function SessionView() {
           .eq('party_id', camp.party_id);
 
         if (members?.length) {
-          const charIds = members.map(m => m.character_id);
-          const { data: chars } = await supabase
-            .from('characters')
-            .select('id, character_data')
-            .in('id', charIds);
+          const players = members.filter(m => m.role !== 'dm' && m.character_id);
+          const charIds = players.map(m => m.character_id);
 
-          const charMap = {};
-          (chars || []).forEach(c => { charMap[c.id] = c.character_data; });
+          if (charIds.length > 0) {
+            const { data: chars } = await supabase
+              .from('characters')
+              .select('id, character_data')
+              .in('id', charIds);
 
-          setPartyMembers(members.map(m => ({
-            ...m,
-            character: charMap[m.character_id] || null,
-          })));
+            const charMap = {};
+            (chars || []).forEach(c => { charMap[c.id] = c.character_data; });
+
+            setPartyMembers(players.map(m => ({
+              ...m,
+              character: charMap[m.character_id] || null,
+            })));
+          }
         }
       }
 
@@ -216,16 +264,14 @@ export default function SessionView() {
     const partyCombatants = partyMembers
       .filter(m => m.character)
       .map(m => {
-        const cd = m.character;
-        const name = cd.name || cd.characterName || 'Unknown';
-        const dexMod = cd.abilities?.dex ? Math.floor((cd.abilities.dex - 10) / 2) : 0;
-        const roll = Math.floor(Math.random() * 20) + 1 + dexMod;
+        const stats = parseCharStats(m.character);
+        const roll = Math.floor(Math.random() * 20) + 1 + (stats.dexMod || 0);
         return {
           id: crypto.randomUUID(),
-          name,
+          name: stats.name,
           init: roll,
-          hp: cd.hp?.current ?? cd.hp?.max ?? 0,
-          maxHp: cd.hp?.max ?? 0,
+          hp: typeof stats.hp === 'number' ? stats.hp : 0,
+          maxHp: typeof stats.maxHp === 'number' ? stats.maxHp : 0,
           active: true,
           isParty: true,
         };
@@ -399,29 +445,23 @@ export default function SessionView() {
         ) : (
           <div className="space-y-2">
             {partyMembers.map(m => {
-              const cd = m.character || {};
-              const name = cd.name || cd.characterName || m.user_email;
-              const charClass = cd.class || cd.className || '';
-              const level = cd.level || '';
-              const ac = cd.ac ?? cd.armorClass ?? '—';
-              const hp = cd.hp?.current ?? cd.hp?.max ?? '—';
-              const maxHp = cd.hp?.max ?? '';
+              const stats = parseCharStats(m.character);
               return (
                 <Card key={m.id}>
                   <div className="flex items-center justify-between">
-                    <span className="font-cinzel text-sm text-domain-text">{name}</span>
-                    {charClass && (
+                    <span className="font-cinzel text-sm text-domain-text">{stats.name}</span>
+                    {stats.charClass && (
                       <span className="text-xs font-ui text-domain-amber">
-                        {charClass}{level ? ` ${level}` : ''}
+                        {stats.charClass}{stats.level ? ` ${stats.level}` : ''}
                       </span>
                     )}
                   </div>
                   <div className="flex gap-4 mt-1.5 text-xs font-ui text-domain-text-dim">
-                    <span className="flex items-center gap-1"><Shield className="w-3 h-3" /> AC {ac}</span>
-                    <span className="flex items-center gap-1"><Heart className="w-3 h-3" /> {hp}{maxHp ? `/${maxHp}` : ''}</span>
-                    {cd.abilities?.wis && (
+                    <span className="flex items-center gap-1"><Shield className="w-3 h-3" /> AC {stats.ac}</span>
+                    <span className="flex items-center gap-1"><Heart className="w-3 h-3" /> {stats.hp}{stats.maxHp ? `/${stats.maxHp}` : ''}</span>
+                    {stats.pp != null && (
                       <span className="flex items-center gap-1">
-                        <Eye className="w-3 h-3" /> PP {10 + Math.floor((cd.abilities.wis - 10) / 2)}
+                        <Eye className="w-3 h-3" /> PP {stats.pp}
                       </span>
                     )}
                   </div>
@@ -435,13 +475,13 @@ export default function SessionView() {
         {partyMembers.length > 0 && (
           <div className="mt-3 grid grid-cols-3 gap-2">
             {(() => {
-              const chars = partyMembers.map(m => m.character).filter(Boolean);
-              const avgAC = chars.length
-                ? Math.round(chars.reduce((s, c) => s + (c.ac ?? c.armorClass ?? 0), 0) / chars.length)
+              const allStats = partyMembers.map(m => parseCharStats(m.character)).filter(s => s.name !== 'Unknown');
+              const avgAC = allStats.length
+                ? Math.round(allStats.reduce((s, st) => s + (typeof st.ac === 'number' ? st.ac : 0), 0) / allStats.length)
                 : '—';
-              const totalHP = chars.reduce((s, c) => s + (c.hp?.current ?? c.hp?.max ?? 0), 0);
-              const hasHealer = chars.some(c =>
-                ['cleric', 'druid', 'paladin', 'bard'].includes((c.class || c.className || '').toLowerCase())
+              const totalHP = allStats.reduce((s, st) => s + (typeof st.hp === 'number' ? st.hp : 0), 0);
+              const hasHealer = allStats.some(st =>
+                ['cleric', 'druid', 'paladin', 'bard'].includes((st.charClass || '').toLowerCase())
               );
               return (
                 <>
