@@ -23,7 +23,7 @@ export default function Landing() {
   };
 
   return (
-    <div className="relative min-h-screen flex flex-col items-center justify-center overflow-hidden bg-domain-bg">
+    <div className="dm-study-bg relative min-h-screen flex flex-col items-center justify-center overflow-hidden">
       {/* Background image */}
       <div
         className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-40"

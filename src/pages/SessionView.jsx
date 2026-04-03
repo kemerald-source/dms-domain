@@ -31,7 +31,7 @@ function SectionHeader({ icon: Icon, title, children }) {
 // ─── Card wrapper ───────────────────────────────────────────────
 function Card({ children, className = '' }) {
   return (
-    <div className={`bg-domain-dark/60 border border-domain-warm/30 rounded-lg p-3 ${className}`}>
+    <div className={`dm-panel-raised border rounded-lg p-3 ${className}`}>
       {children}
     </div>
   );
@@ -236,8 +236,8 @@ export default function SessionView() {
   // ─── Loading / auth states ──────────────────────────────────
   if (authLoading || loading) {
     return (
-      <div className="min-h-screen bg-domain-bg flex items-center justify-center">
-        <Loader2 className="w-8 h-8 text-eg4h-gold animate-spin" />
+      <div className="dm-study-bg min-h-screen flex items-center justify-center">
+        <Loader2 className="w-8 h-8 text-eg4h-gold animate-spin relative z-10" />
       </div>
     );
   }
@@ -255,7 +255,7 @@ export default function SessionView() {
           onChange={e => setLiveNote(e.target.value)}
           placeholder="Live session notes... jot down what happens as you play."
           rows={5}
-          className="w-full px-3 py-2 bg-domain-bg border border-domain-warm/40 rounded-lg text-domain-text placeholder-domain-text-dim/40 focus:border-eg4h-gold-dark focus:outline-none font-crimson text-sm resize-none"
+          className="w-full px-3 py-2 bg-domain-dark border border-domain-panel-border/40 rounded-lg text-domain-text placeholder-domain-text-dim/40 focus:border-eg4h-gold-dark focus:outline-none font-crimson text-sm resize-none"
         />
         <button
           onClick={saveNote}
@@ -280,7 +280,7 @@ export default function SessionView() {
       {/* NPCs */}
       <div>
         <SectionHeader icon={Users} title="NPCs">
-          <button className="flex items-center gap-1 px-2 py-1 text-xs font-ui text-domain-amber border border-domain-warm/40 rounded hover:border-eg4h-gold-dark/60 transition-colors cursor-pointer">
+          <button className="flex items-center gap-1 px-2 py-1 text-xs font-ui text-domain-amber border border-domain-panel-border/50 rounded hover:border-eg4h-gold-dark/60 transition-colors cursor-pointer">
             <Sparkles className="w-3 h-3" /> Quick NPC
           </button>
         </SectionHeader>
@@ -351,7 +351,7 @@ export default function SessionView() {
             value={improvInput}
             onChange={e => setImprovInput(e.target.value)}
             placeholder="Ask for an improv suggestion..."
-            className="flex-1 px-3 py-2 bg-domain-bg border border-domain-warm/40 rounded-lg text-domain-text placeholder-domain-text-dim/40 focus:border-eg4h-gold-dark focus:outline-none font-crimson text-sm"
+            className="flex-1 px-3 py-2 bg-domain-dark border border-domain-panel-border/40 rounded-lg text-domain-text placeholder-domain-text-dim/40 focus:border-eg4h-gold-dark focus:outline-none font-crimson text-sm"
           />
           <button className="px-3 py-2 text-xs font-ui text-domain-amber border border-domain-warm/40 rounded-lg hover:border-eg4h-gold-dark/60 transition-colors cursor-pointer opacity-50" disabled>
             <Sparkles className="w-4 h-4" />
@@ -445,15 +445,15 @@ export default function SessionView() {
               );
               return (
                 <>
-                  <div className="bg-domain-bg border border-domain-warm/20 rounded p-2 text-center">
+                  <div className="bg-domain-panel border border-domain-panel-border/30 rounded p-2 text-center">
                     <p className="text-[10px] font-ui text-domain-text-dim">Avg AC</p>
                     <p className="text-lg font-cinzel text-domain-amber">{avgAC}</p>
                   </div>
-                  <div className="bg-domain-bg border border-domain-warm/20 rounded p-2 text-center">
+                  <div className="bg-domain-panel border border-domain-panel-border/30 rounded p-2 text-center">
                     <p className="text-[10px] font-ui text-domain-text-dim">Total HP</p>
                     <p className="text-lg font-cinzel text-domain-amber">{totalHP}</p>
                   </div>
-                  <div className="bg-domain-bg border border-domain-warm/20 rounded p-2 text-center">
+                  <div className="bg-domain-panel border border-domain-panel-border/30 rounded p-2 text-center">
                     <p className="text-[10px] font-ui text-domain-text-dim">Healer</p>
                     <p className={`text-lg font-cinzel ${hasHealer ? 'text-green-400' : 'text-red-400'}`}>
                       {hasHealer ? '✓' : '✗'}
@@ -475,7 +475,7 @@ export default function SessionView() {
             )}
             <button
               onClick={() => setShowAddCombatant(true)}
-              className="p-1 text-domain-amber border border-domain-warm/40 rounded hover:border-eg4h-gold-dark/60 transition-colors cursor-pointer"
+              className="p-1 text-domain-amber border border-domain-panel-border/50 rounded hover:border-eg4h-gold-dark/60 transition-colors cursor-pointer"
             >
               <Plus className="w-3 h-3" />
             </button>
@@ -484,14 +484,14 @@ export default function SessionView() {
 
         {/* Add combatant form */}
         {showAddCombatant && (
-          <Card className="mb-2 !bg-domain-mid">
+          <Card className="mb-2 !bg-domain-panel-raised">
             <div className="grid grid-cols-3 gap-2 mb-2">
               <input
                 type="text"
                 placeholder="Name"
                 value={newCombatant.name}
                 onChange={e => setNewCombatant(p => ({ ...p, name: e.target.value }))}
-                className="px-2 py-1 bg-domain-bg border border-domain-warm/30 rounded text-xs text-domain-text placeholder-domain-text-dim/40 focus:border-eg4h-gold-dark focus:outline-none font-crimson"
+                className="px-2 py-1 bg-domain-dark border border-domain-panel-border/30 rounded text-xs text-domain-text placeholder-domain-text-dim/40 focus:border-eg4h-gold-dark focus:outline-none font-crimson"
                 autoFocus
               />
               <input
@@ -499,14 +499,14 @@ export default function SessionView() {
                 placeholder="Init"
                 value={newCombatant.init}
                 onChange={e => setNewCombatant(p => ({ ...p, init: e.target.value }))}
-                className="px-2 py-1 bg-domain-bg border border-domain-warm/30 rounded text-xs text-domain-text placeholder-domain-text-dim/40 focus:border-eg4h-gold-dark focus:outline-none font-crimson"
+                className="px-2 py-1 bg-domain-dark border border-domain-panel-border/30 rounded text-xs text-domain-text placeholder-domain-text-dim/40 focus:border-eg4h-gold-dark focus:outline-none font-crimson"
               />
               <input
                 type="number"
                 placeholder="HP"
                 value={newCombatant.hp}
                 onChange={e => setNewCombatant(p => ({ ...p, hp: e.target.value }))}
-                className="px-2 py-1 bg-domain-bg border border-domain-warm/30 rounded text-xs text-domain-text placeholder-domain-text-dim/40 focus:border-eg4h-gold-dark focus:outline-none font-crimson"
+                className="px-2 py-1 bg-domain-dark border border-domain-panel-border/30 rounded text-xs text-domain-text placeholder-domain-text-dim/40 focus:border-eg4h-gold-dark focus:outline-none font-crimson"
               />
             </div>
             <div className="flex gap-2">
@@ -520,7 +520,7 @@ export default function SessionView() {
               {partyMembers.length > 0 && combatants.filter(c => c.isParty).length === 0 && (
                 <button
                   onClick={addPartyToInitiative}
-                  className="px-3 py-1 text-xs font-ui text-domain-amber border border-domain-warm/40 rounded hover:border-eg4h-gold-dark/60 cursor-pointer"
+                  className="px-3 py-1 text-xs font-ui text-domain-amber border border-domain-panel-border/50 rounded hover:border-eg4h-gold-dark/60 cursor-pointer"
                 >
                   + Party (auto-roll)
                 </button>
@@ -548,7 +548,7 @@ export default function SessionView() {
                   className={`flex items-center gap-2 px-2 py-1.5 rounded text-xs ${
                     i === (combatRound > 0 ? (combatRound - 1) % combatants.length : -1)
                       ? 'bg-eg4h-gold/10 border border-eg4h-gold-dark/40'
-                      : 'bg-domain-dark/40 border border-domain-warm/20'
+                      : 'bg-domain-panel/60 border border-domain-panel-border/20'
                   } ${c.hp === 0 && c.maxHp > 0 ? 'opacity-40' : ''}`}
                 >
                   <span className="font-ui text-domain-amber w-6 text-center">{c.init}</span>
@@ -587,7 +587,7 @@ export default function SessionView() {
               {combatRound > 0 && (
                 <button
                   onClick={() => { setCombatants([]); setCombatRound(0); }}
-                  className="px-3 py-1.5 text-xs font-ui text-domain-text-dim border border-domain-warm/30 rounded hover:text-red-400 hover:border-red-800/50 cursor-pointer"
+                  className="px-3 py-1.5 text-xs font-ui text-domain-text-dim border border-domain-panel-border/40 rounded hover:text-red-400 hover:border-red-800/50 cursor-pointer"
                 >
                   End
                 </button>
@@ -603,9 +603,9 @@ export default function SessionView() {
   // RENDER
   // ═══════════════════════════════════════════════════════════════
   return (
-    <div className="min-h-screen bg-domain-bg flex flex-col">
+    <div className="dm-study-bg min-h-screen flex flex-col">
       {/* Header */}
-      <header className="border-b border-domain-warm/50 bg-domain-dark/80 backdrop-blur-sm sticky top-0 z-20">
+      <header className="border-b border-domain-panel-border/60 bg-domain-dark/90 backdrop-blur-sm sticky top-0 z-20 dm-header-glow relative">
         <div className="max-w-[1600px] mx-auto px-4 py-3 flex items-center gap-4">
           <button
             onClick={() => navigate('/dashboard')}
@@ -624,7 +624,7 @@ export default function SessionView() {
       </header>
 
       {/* Mobile tab bar */}
-      <div className="lg:hidden border-b border-domain-warm/30 bg-domain-dark/60">
+      <div className="lg:hidden border-b border-domain-panel-border/40 bg-domain-panel/80 relative z-10">
         <div className="flex">
           {TABS.map(tab => {
             const Icon = tab.icon;
@@ -647,11 +647,11 @@ export default function SessionView() {
       </div>
 
       {/* Three-column desktop / tabbed mobile */}
-      <div className="flex-1 max-w-[1600px] mx-auto w-full">
+      <div className="flex-1 max-w-[1600px] mx-auto w-full relative z-10">
         {/* Desktop: three columns */}
         <div className="hidden lg:grid lg:grid-cols-3 gap-0 h-[calc(100vh-64px)]">
-          <div className="border-r border-domain-warm/20 p-4 overflow-y-auto">{LeftPanel}</div>
-          <div className="border-r border-domain-warm/20 p-4 overflow-y-auto">{CenterPanel}</div>
+          <div className="border-r border-domain-panel-border/30 p-4 overflow-y-auto">{LeftPanel}</div>
+          <div className="border-r border-domain-panel-border/30 p-4 overflow-y-auto">{CenterPanel}</div>
           <div className="p-4 overflow-y-auto">{RightPanel}</div>
         </div>
 

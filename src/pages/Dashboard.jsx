@@ -127,16 +127,16 @@ export default function Dashboard() {
 
   if (authLoading || (!isAuthenticated && !authLoading)) {
     return (
-      <div className="min-h-screen bg-domain-bg flex items-center justify-center">
-        <Loader2 className="w-8 h-8 text-eg4h-gold animate-spin" />
+      <div className="dm-study-bg min-h-screen flex items-center justify-center">
+        <Loader2 className="w-8 h-8 text-eg4h-gold animate-spin relative z-10" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-domain-bg">
+    <div className="dm-study-bg min-h-screen">
       {/* Header */}
-      <header className="border-b border-domain-warm/50 bg-domain-dark/80 backdrop-blur-sm sticky top-0 z-20">
+      <header className="border-b border-domain-panel-border/60 bg-domain-dark/90 backdrop-blur-sm sticky top-0 z-20 dm-header-glow relative">
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <img src="/dmd-logo.png" alt="DMD" className="w-10 h-10" />
@@ -161,7 +161,7 @@ export default function Dashboard() {
       </header>
 
       {/* Main content */}
-      <main className="max-w-6xl mx-auto px-6 py-10">
+      <main className="max-w-6xl mx-auto px-6 py-10 relative z-10">
         <div className="flex items-center justify-between mb-8">
           <h2 className="font-cinzel text-2xl md:text-3xl text-domain-text">Your Campaigns</h2>
           <button
@@ -182,7 +182,7 @@ export default function Dashboard() {
             onClick={() => setShowCreate(false)}
           >
             <motion.div
-              className="bg-domain-dark border border-domain-warm rounded-xl p-6 w-full max-w-md"
+              className="dm-panel-raised border rounded-xl p-6 w-full max-w-md"
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               onClick={e => e.stopPropagation()}
@@ -196,7 +196,7 @@ export default function Dashboard() {
                   value={newName}
                   onChange={e => setNewName(e.target.value)}
                   placeholder="The Lost Mines of Phandelver"
-                  className="w-full px-4 py-2.5 bg-domain-bg border border-domain-warm rounded-lg text-domain-text placeholder-domain-text-dim/50 focus:border-eg4h-gold-dark focus:outline-none font-crimson"
+                  className="w-full px-4 py-2.5 bg-domain-dark border border-domain-panel-border/50 rounded-lg text-domain-text placeholder-domain-text-dim/50 focus:border-eg4h-gold-dark focus:outline-none font-crimson"
                   autoFocus
                 />
               </label>
@@ -208,7 +208,7 @@ export default function Dashboard() {
                   onChange={e => setNewDesc(e.target.value)}
                   placeholder="A brief overview of the campaign..."
                   rows={3}
-                  className="w-full px-4 py-2.5 bg-domain-bg border border-domain-warm rounded-lg text-domain-text placeholder-domain-text-dim/50 focus:border-eg4h-gold-dark focus:outline-none font-crimson resize-none"
+                  className="w-full px-4 py-2.5 bg-domain-dark border border-domain-panel-border/50 rounded-lg text-domain-text placeholder-domain-text-dim/50 focus:border-eg4h-gold-dark focus:outline-none font-crimson resize-none"
                 />
               </label>
 
@@ -217,7 +217,7 @@ export default function Dashboard() {
                 <select
                   value={selectedParty}
                   onChange={e => setSelectedParty(e.target.value)}
-                  className="w-full px-4 py-2.5 bg-domain-bg border border-domain-warm rounded-lg text-domain-text focus:border-eg4h-gold-dark focus:outline-none font-crimson"
+                  className="w-full px-4 py-2.5 bg-domain-dark border border-domain-panel-border/50 rounded-lg text-domain-text focus:border-eg4h-gold-dark focus:outline-none font-crimson"
                 >
                   <option value="">No party linked</option>
                   {parties.map(p => (
@@ -267,7 +267,7 @@ export default function Dashboard() {
             {campaigns.map((campaign, i) => (
               <motion.div
                 key={campaign.id}
-                className="bg-domain-dark/60 border border-domain-warm/40 rounded-xl p-5 hover:border-eg4h-gold-dark/40 transition-colors cursor-pointer group"
+                className="dm-panel border rounded-xl p-5 hover:border-eg4h-gold-dark/40 transition-colors cursor-pointer group"
                 initial={{ opacity: 0, y: 15 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.05 }}
