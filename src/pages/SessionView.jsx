@@ -301,7 +301,7 @@ export default function SessionView() {
           onChange={e => setLiveNote(e.target.value)}
           placeholder="Live session notes... jot down what happens as you play."
           rows={5}
-          className="w-full px-3 py-2 bg-domain-dark border border-domain-panel-border/40 rounded-lg text-domain-text placeholder-domain-text-dim/40 focus:border-eg4h-gold-dark focus:outline-none font-crimson text-sm resize-none"
+          className="w-full px-3 py-2 bg-[rgba(15,12,8,0.50)] border border-domain-panel-border/40 rounded-lg text-domain-text placeholder-domain-text-dim/40 focus:border-eg4h-gold-dark focus:outline-none font-crimson text-sm resize-none"
         />
         <button
           onClick={saveNote}
@@ -397,7 +397,7 @@ export default function SessionView() {
             value={improvInput}
             onChange={e => setImprovInput(e.target.value)}
             placeholder="Ask for an improv suggestion..."
-            className="flex-1 px-3 py-2 bg-domain-dark border border-domain-panel-border/40 rounded-lg text-domain-text placeholder-domain-text-dim/40 focus:border-eg4h-gold-dark focus:outline-none font-crimson text-sm"
+            className="flex-1 px-3 py-2 bg-[rgba(15,12,8,0.50)] border border-domain-panel-border/40 rounded-lg text-domain-text placeholder-domain-text-dim/40 focus:border-eg4h-gold-dark focus:outline-none font-crimson text-sm"
           />
           <button className="px-3 py-2 text-xs font-ui text-domain-amber border border-domain-warm/40 rounded-lg hover:border-eg4h-gold-dark/60 transition-colors cursor-pointer opacity-50" disabled>
             <Sparkles className="w-4 h-4" />
@@ -531,7 +531,7 @@ export default function SessionView() {
                 placeholder="Name"
                 value={newCombatant.name}
                 onChange={e => setNewCombatant(p => ({ ...p, name: e.target.value }))}
-                className="px-2 py-1 bg-domain-dark border border-domain-panel-border/30 rounded text-xs text-domain-text placeholder-domain-text-dim/40 focus:border-eg4h-gold-dark focus:outline-none font-crimson"
+                className="px-2 py-1 bg-[rgba(15,12,8,0.50)] border border-domain-panel-border/30 rounded text-xs text-domain-text placeholder-domain-text-dim/40 focus:border-eg4h-gold-dark focus:outline-none font-crimson"
                 autoFocus
               />
               <input
@@ -539,14 +539,14 @@ export default function SessionView() {
                 placeholder="Init"
                 value={newCombatant.init}
                 onChange={e => setNewCombatant(p => ({ ...p, init: e.target.value }))}
-                className="px-2 py-1 bg-domain-dark border border-domain-panel-border/30 rounded text-xs text-domain-text placeholder-domain-text-dim/40 focus:border-eg4h-gold-dark focus:outline-none font-crimson"
+                className="px-2 py-1 bg-[rgba(15,12,8,0.50)] border border-domain-panel-border/30 rounded text-xs text-domain-text placeholder-domain-text-dim/40 focus:border-eg4h-gold-dark focus:outline-none font-crimson"
               />
               <input
                 type="number"
                 placeholder="HP"
                 value={newCombatant.hp}
                 onChange={e => setNewCombatant(p => ({ ...p, hp: e.target.value }))}
-                className="px-2 py-1 bg-domain-dark border border-domain-panel-border/30 rounded text-xs text-domain-text placeholder-domain-text-dim/40 focus:border-eg4h-gold-dark focus:outline-none font-crimson"
+                className="px-2 py-1 bg-[rgba(15,12,8,0.50)] border border-domain-panel-border/30 rounded text-xs text-domain-text placeholder-domain-text-dim/40 focus:border-eg4h-gold-dark focus:outline-none font-crimson"
               />
             </div>
             <div className="flex gap-2">
