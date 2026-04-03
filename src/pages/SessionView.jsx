@@ -20,7 +20,7 @@ const TABS = [
 function SectionHeader({ icon: Icon, title, children }) {
   return (
     <div className="flex items-center justify-between mb-3">
-      <h3 className="font-cinzel text-sm text-eg4h-gold flex items-center gap-2">
+      <h3 className="font-cinzel text-sm text-domain-text flex items-center gap-2">
         <Icon className="w-4 h-4" /> {title}
       </h3>
       {children}
@@ -315,7 +315,7 @@ export default function SessionView() {
           <div className="mt-3 max-h-40 overflow-y-auto space-y-2">
             {sessionNotes.slice(0, 5).map(note => (
               <Card key={note.id} className="!p-2">
-                <p className="text-xs font-cinzel text-domain-amber">{note.title}</p>
+                <p className="text-xs font-cinzel text-domain-text">{note.title}</p>
                 <p className="text-xs font-crimson text-domain-text-dim mt-0.5 line-clamp-2">{note.raw_notes}</p>
               </Card>
             ))}
@@ -343,7 +343,7 @@ export default function SessionView() {
                     {npc.status}
                   </span>
                 </div>
-                {npc.role && <p className="text-xs font-crimson text-domain-amber mt-0.5">{npc.role}</p>}
+                {npc.role && <p className="text-xs font-crimson text-domain-parchment-dark mt-0.5">{npc.role}</p>}
                 {npc.location && <p className="text-xs font-crimson text-domain-text-dim mt-0.5">{npc.location}</p>}
                 {npc.personality && <p className="text-xs font-crimson text-domain-text-dim/70 mt-1 italic line-clamp-2">{npc.personality}</p>}
               </Card>
@@ -375,7 +375,7 @@ export default function SessionView() {
                   </span>
                 </div>
                 {thread.thread_type && (
-                  <span className="inline-block mt-1 px-1.5 py-0.5 text-[10px] font-ui bg-domain-warm/30 text-domain-amber rounded">
+                  <span className="inline-block mt-1 px-1.5 py-0.5 text-[10px] font-ui bg-domain-warm/30 text-domain-parchment-dark rounded">
                     {thread.thread_type}
                   </span>
                 )}
@@ -416,7 +416,7 @@ export default function SessionView() {
             {lore.map(entry => (
               <Card key={entry.id} className="!p-2">
                 <div className="flex items-center gap-2">
-                  <span className="px-1.5 py-0.5 text-[10px] font-ui bg-domain-warm/30 text-domain-amber rounded">{entry.type}</span>
+                  <span className="px-1.5 py-0.5 text-[10px] font-ui bg-domain-warm/30 text-domain-parchment-dark rounded">{entry.type}</span>
                   <span className="font-cinzel text-xs text-domain-text">{entry.name}</span>
                 </div>
                 {entry.description && (
@@ -451,7 +451,7 @@ export default function SessionView() {
                   <div className="flex items-center justify-between">
                     <span className="font-cinzel text-sm text-domain-text">{stats.name}</span>
                     {stats.charClass && (
-                      <span className="text-xs font-ui text-domain-amber">
+                      <span className="text-xs font-ui text-domain-parchment-dark">
                         {stats.charClass}{stats.level ? ` ${stats.level}` : ''}
                       </span>
                     )}
@@ -487,11 +487,11 @@ export default function SessionView() {
                 <>
                   <div className="bg-domain-panel border border-domain-panel-border/30 rounded p-2 text-center">
                     <p className="text-[10px] font-ui text-domain-text-dim">Avg AC</p>
-                    <p className="text-lg font-cinzel text-domain-amber">{avgAC}</p>
+                    <p className="text-lg font-cinzel text-domain-text">{avgAC}</p>
                   </div>
                   <div className="bg-domain-panel border border-domain-panel-border/30 rounded p-2 text-center">
                     <p className="text-[10px] font-ui text-domain-text-dim">Total HP</p>
-                    <p className="text-lg font-cinzel text-domain-amber">{totalHP}</p>
+                    <p className="text-lg font-cinzel text-domain-text">{totalHP}</p>
                   </div>
                   <div className="bg-domain-panel border border-domain-panel-border/30 rounded p-2 text-center">
                     <p className="text-[10px] font-ui text-domain-text-dim">Healer</p>
@@ -591,7 +591,7 @@ export default function SessionView() {
                       : 'bg-domain-panel/60 border border-domain-panel-border/20'
                   } ${c.hp === 0 && c.maxHp > 0 ? 'opacity-40' : ''}`}
                 >
-                  <span className="font-ui text-domain-amber w-6 text-center">{c.init}</span>
+                  <span className="font-ui text-domain-text w-6 text-center">{c.init}</span>
                   <span className={`font-cinzel flex-1 ${c.isParty ? 'text-eg4h-gold' : 'text-domain-text'}`}>
                     {c.name}
                   </span>
