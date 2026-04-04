@@ -240,6 +240,17 @@ export default function SessionView() {
       setLore(loreRes.data || []);
       setSessionNotes(noteRes.data || []);
 
+      // Restore persisted AI summary from the most recent note that has one
+      const notesWithSummary = (noteRes.data || []).filter(n => n.ai_summary);
+      if (notesWithSummary.length > 0) {
+        try {
+          const parsed = typeof notesWithSummary[0].ai_summary === 'string'
+            ? JSON.parse(notesWithSummary[0].ai_summary)
+            : notesWithSummary[0].ai_summary;
+          setSessionSummary(parsed);
+        } catch { /* ignore parse errors */ }
+      }
+
       // Group SRD entries by category
       const grouped = {};
       (srdRes.data || []).forEach(entry => {
@@ -874,7 +885,17 @@ export default function SessionView() {
                   });
                   if (res.ok) {
                     const { result, raw } = await res.json();
-                    setSessionSummary(result || { narrative_summary: raw || 'Could not generate summary.' });
+                    const summary = result || { narrative_summary: raw || 'Could not generate summary.' };
+                    setSessionSummary(summary);
+
+                    // Persist to the most recent session note
+                    const latestNote = sessionNotes[0];
+                    if (latestNote && supabase) {
+                      await supabase
+                        .from('session_notes')
+                        .update({ ai_summary: JSON.stringify(summary) })
+                        .eq('id', latestNote.id);
+                    }
                   }
                 } catch (err) {
                   console.error('Summary generation error:', err);
