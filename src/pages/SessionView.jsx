@@ -661,9 +661,35 @@ export default function SessionView() {
               <Card key={npc.id}>
                 <div className="flex items-center justify-between">
                   <span className="font-cinzel text-sm text-domain-text">{npc.name}</span>
-                  <span className={`text-xs font-ui ${STATUS_COLORS[npc.status] || 'text-gray-400'}`}>
-                    {npc.status}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={npc.status || 'alive'}
+                      onChange={async (e) => {
+                        const newStatus = e.target.value;
+                        setNpcs(prev => prev.map(n => n.id === npc.id ? { ...n, status: newStatus } : n));
+                        if (supabase) {
+                          const { error } = await supabase.from('npcs').update({ status: newStatus }).eq('id', npc.id);
+                          if (error) console.error('NPC status update failed:', error.message);
+                        }
+                      }}
+                      className={`text-xs font-ui bg-transparent border-none outline-none cursor-pointer ${STATUS_COLORS[npc.status] || 'text-gray-400'}`}
+                    >
+                      <option value="alive" className="bg-domain-dark text-green-400">alive</option>
+                      <option value="dead" className="bg-domain-dark text-red-400">dead</option>
+                      <option value="missing" className="bg-domain-dark text-yellow-400">missing</option>
+                      <option value="unknown" className="bg-domain-dark text-gray-400">unknown</option>
+                    </select>
+                    <button
+                      onClick={async () => {
+                        if (!supabase) return;
+                        const { error } = await supabase.from('npcs').delete().eq('id', npc.id);
+                        if (!error) setNpcs(prev => prev.filter(n => n.id !== npc.id));
+                      }}
+                      className="text-domain-text-dim/40 hover:text-red-400 cursor-pointer"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  </div>
                 </div>
                 {npc.role && <p className="text-xs font-crimson text-domain-parchment-dark mt-0.5">{npc.role}</p>}
                 {npc.motivation && <p className="text-xs font-crimson text-domain-text-dim mt-0.5">Goal: {npc.motivation}</p>}
