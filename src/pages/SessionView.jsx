@@ -1079,7 +1079,7 @@ export default function SessionView() {
                   className="w-full flex items-center gap-2 px-2 py-1.5 text-xs font-cinzel text-domain-text hover:text-eg4h-gold bg-domain-panel/40 border border-domain-panel-border/20 rounded transition-colors cursor-pointer"
                 >
                   <ChevronRight className={`w-3 h-3 transition-transform ${expandedSrdCats[category] ? 'rotate-90' : ''}`} />
-                  {category}
+                  {category.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
                   <span className="text-[10px] font-ui text-domain-text-dim/40 ml-auto">{entries.length}</span>
                 </button>
                 {expandedSrdCats[category] && (
