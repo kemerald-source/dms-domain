@@ -130,7 +130,7 @@ export default function SessionView() {
 
   const [campaign, setCampaign] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('left');
+  const [activeTab, setActiveTab] = useState(() => localStorage.getItem('dmd-active-tab') || 'left');
 
   // Left panel state
   const [npcs, setNpcs] = useState([]);
@@ -1393,7 +1393,7 @@ export default function SessionView() {
             return (
               <button
                 key={tab.key}
-                onClick={() => setActiveTab(tab.key)}
+                onClick={() => { setActiveTab(tab.key); localStorage.setItem('dmd-active-tab', tab.key); }}
                 className={`flex-1 flex items-center justify-center gap-2 py-3 text-xs font-ui transition-colors cursor-pointer ${
                   activeTab === tab.key
                     ? 'text-eg4h-gold border-b-2 border-eg4h-gold'
