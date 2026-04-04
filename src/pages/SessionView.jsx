@@ -350,22 +350,26 @@ export default function SessionView() {
     const motivation = pickRandom(NPC_MOTIVATIONS);
     const voice = pickRandom(NPC_VOICES);
 
-    const description = npcPrompt.trim() || null;
-    const fullPersonality = `${personality}. Quirk: ${quirk}. Voice: ${voice}`;
+    const payload = {
+      campaign_id: campaignId,
+      name,
+      role,
+      status: 'alive',
+      personality,
+      quirks: quirk,
+      voice_notes: voice,
+      motivation,
+    };
 
     const { data, error } = await supabase
       .from('npcs')
-      .insert({
-        campaign_id: campaignId,
-        name,
-        role,
-        status: 'alive',
-        personality: fullPersonality,
-        motivation,
-        description,
-      })
+      .insert(payload)
       .select()
       .single();
+
+    if (error) {
+      console.error('NPC insert failed:', error.message, error.details, error.hint);
+    }
 
     if (!error && data) {
       setNpcs(prev => [data, ...prev]);
@@ -663,8 +667,9 @@ export default function SessionView() {
                 </div>
                 {npc.role && <p className="text-xs font-crimson text-domain-parchment-dark mt-0.5">{npc.role}</p>}
                 {npc.motivation && <p className="text-xs font-crimson text-domain-text-dim mt-0.5">Goal: {npc.motivation}</p>}
-                {npc.description && <p className="text-xs font-crimson text-domain-text-dim/60 mt-0.5">{npc.description}</p>}
-                {npc.personality && <p className="text-xs font-crimson text-domain-text-dim/70 mt-1 italic line-clamp-3">{npc.personality}</p>}
+                {npc.personality && <p className="text-xs font-crimson text-domain-text-dim/70 mt-1 italic line-clamp-2">{npc.personality}</p>}
+                {npc.quirks && <p className="text-xs font-crimson text-domain-text-dim/60 mt-0.5">Quirk: {npc.quirks}</p>}
+                {npc.voice_notes && <p className="text-xs font-crimson text-domain-text-dim/60 mt-0.5">Voice: {npc.voice_notes}</p>}
               </Card>
             ))}
           </div>
