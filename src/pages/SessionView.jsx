@@ -151,6 +151,7 @@ export default function SessionView() {
   const [editNoteText, setEditNoteText] = useState('');
   const [savingEditNote, setSavingEditNote] = useState(false);
   const [creatingSess, setCreatingSess] = useState(false);
+  const [summaryExpanded, setSummaryExpanded] = useState(false);
 
   // NPC edit form state
   const [showNpcForm, setShowNpcForm] = useState(false);
@@ -891,7 +892,7 @@ export default function SessionView() {
   const renderSummary = (summary) => {
     if (!summary) return null;
     return (
-      <div className="mt-2 p-3 bg-domain-panel/40 border border-domain-panel-border/20 rounded-lg space-y-2">
+      <div className="mt-2 space-y-2">
         {summary.key_events?.length > 0 && (
           <div>
             <p className="text-[10px] font-cinzel text-domain-text mb-1">Key Events</p>
@@ -1008,6 +1009,21 @@ export default function SessionView() {
                         <Pencil className="w-3 h-3" />
                       </button>
                     </div>
+
+                    {/* Collapsible AI Summary inside the card */}
+                    {(sessionSummary || activeSummary) && (
+                      <div className="mt-2 pt-2 border-t border-domain-panel-border/20">
+                        <button
+                          onClick={() => setSummaryExpanded(v => !v)}
+                          className="flex items-center gap-1.5 text-[11px] font-cinzel text-domain-amber/80 hover:text-domain-amber cursor-pointer w-full"
+                        >
+                          <ChevronRight className={`w-3 h-3 transition-transform ${summaryExpanded ? 'rotate-90' : ''}`} />
+                          <Sparkles className="w-3 h-3" />
+                          AI Summary
+                        </button>
+                        {summaryExpanded && renderSummary(sessionSummary || activeSummary)}
+                      </div>
+                    )}
                   </Card>
                 )}
               </div>
@@ -1033,7 +1049,7 @@ export default function SessionView() {
               </div>
             )}
 
-            {/* AI Summary for this session */}
+            {/* Generate Summary button */}
             {activeNote.raw_notes && (
               <div className="mt-3">
                 <button
@@ -1060,6 +1076,7 @@ export default function SessionView() {
                         const { result, raw } = await res.json();
                         const summary = result || { narrative_summary: raw || 'Could not generate summary.' };
                         setSessionSummary(summary);
+                        setSummaryExpanded(true);
 
                         // Persist to this session note
                         await supabase
@@ -1073,6 +1090,7 @@ export default function SessionView() {
                     } catch (err) {
                       console.error('Summary generation error:', err);
                       setSessionSummary({ narrative_summary: 'AI summary unavailable — try again later.' });
+                      setSummaryExpanded(true);
                     }
                     setSummaryLoading(false);
                   }}
@@ -1082,7 +1100,6 @@ export default function SessionView() {
                   {summaryLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
                   {summaryLoading ? 'Generating...' : activeSummary ? 'Regenerate Summary' : 'Generate Summary'}
                 </button>
-                {renderSummary(sessionSummary || activeSummary)}
               </div>
             )}
           </div>
