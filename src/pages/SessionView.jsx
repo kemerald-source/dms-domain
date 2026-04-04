@@ -5,6 +5,7 @@ import {
   ArrowLeft, Loader2, Plus, Trash2, Swords, BookOpen, Users,
   Scroll, Sparkles, Globe, ChevronUp, ChevronDown, Shield,
   Heart, Eye, X, GripVertical, Pencil, Save, Lock, EyeOff, Dices,
+  ChevronRight, BookMarked, MapPin, Clock,
 } from 'lucide-react';
 import { useAuth } from '@/api/AuthContext';
 import { supabase } from '@/lib/supabase';
@@ -136,6 +137,15 @@ export default function SessionView() {
   const [sessionNotes, setSessionNotes] = useState([]);
   const [liveNote, setLiveNote] = useState('');
   const [savingNote, setSavingNote] = useState(false);
+  const [editingNoteId, setEditingNoteId] = useState(null);
+  const [editNoteText, setEditNoteText] = useState('');
+  const [savingEditNote, setSavingEditNote] = useState(false);
+
+  // NPC edit form state
+  const [showNpcForm, setShowNpcForm] = useState(false);
+  const [editingNpc, setEditingNpc] = useState(null);
+  const [npcForm, setNpcForm] = useState({ name: '', role: '', personality: '', quirks: '', voice_notes: '', motivation: '', location: '' });
+  const [savingNpc, setSavingNpc] = useState(false);
 
   // Center panel state
   const [threads, setThreads] = useState([]);
@@ -153,6 +163,10 @@ export default function SessionView() {
   const [editingLore, setEditingLore] = useState(null);
   const [loreForm, setLoreForm] = useState({ name: '', type: 'location', description: '', notes: '' });
   const [savingLore, setSavingLore] = useState(false);
+
+  // SRD Quick Reference state
+  const [srdRef, setSrdRef] = useState({});
+  const [expandedSrdCats, setExpandedSrdCats] = useState({});
 
   // Quick NPC state
   const [showNpcGen, setShowNpcGen] = useState(false);
@@ -197,17 +211,27 @@ export default function SessionView() {
       setCampaign(camp);
 
       // Parallel fetches
-      const [npcRes, threadRes, loreRes, noteRes] = await Promise.all([
+      const [npcRes, threadRes, loreRes, noteRes, srdRes] = await Promise.all([
         supabase.from('npcs').select('*').eq('campaign_id', campaignId).order('updated_at', { ascending: false }),
         supabase.from('story_threads').select('*').eq('campaign_id', campaignId).order('urgency', { ascending: false }),
         supabase.from('world_lore').select('*').eq('campaign_id', campaignId).order('name'),
         supabase.from('session_notes').select('*').eq('campaign_id', campaignId).order('session_number', { ascending: false }),
+        supabase.from('srd_reference').select('*').order('category').order('name'),
       ]);
 
       setNpcs(npcRes.data || []);
       setThreads(threadRes.data || []);
       setLore(loreRes.data || []);
       setSessionNotes(noteRes.data || []);
+
+      // Group SRD entries by category
+      const grouped = {};
+      (srdRes.data || []).forEach(entry => {
+        const cat = entry.category || 'Other';
+        if (!grouped[cat]) grouped[cat] = [];
+        grouped[cat].push(entry);
+      });
+      setSrdRef(grouped);
 
       // Party members with character data — exclude DM entries and DM email
       if (camp.party_id) {
@@ -289,6 +313,69 @@ export default function SessionView() {
     setSavingNote(false);
   };
 
+  // ─── Edit a saved session note ─────────────────────────────
+  const startEditNote = (note) => {
+    setEditingNoteId(note.id);
+    setEditNoteText(note.raw_notes);
+  };
+
+  const saveEditNote = async (noteId) => {
+    if (!editNoteText.trim() || !supabase) return;
+    setSavingEditNote(true);
+    const { data, error } = await supabase
+      .from('session_notes')
+      .update({ raw_notes: editNoteText.trim() })
+      .eq('id', noteId)
+      .select()
+      .single();
+    if (!error && data) {
+      setSessionNotes(prev => prev.map(n => n.id === data.id ? data : n));
+    }
+    setEditingNoteId(null);
+    setEditNoteText('');
+    setSavingEditNote(false);
+  };
+
+  // ─── NPC edit ──────────────────────────────────────────────
+  const openEditNpc = (npc) => {
+    setEditingNpc(npc);
+    setNpcForm({
+      name: npc.name || '',
+      role: npc.role || '',
+      personality: npc.personality || '',
+      quirks: npc.quirks || '',
+      voice_notes: npc.voice_notes || '',
+      motivation: npc.motivation || '',
+      location: npc.location || '',
+    });
+    setShowNpcForm(true);
+  };
+
+  const saveNpcEdit = async () => {
+    if (!npcForm.name.trim() || !supabase || !editingNpc) return;
+    setSavingNpc(true);
+    const { data, error } = await supabase
+      .from('npcs')
+      .update({
+        name: npcForm.name.trim(),
+        role: npcForm.role.trim() || null,
+        personality: npcForm.personality.trim() || null,
+        quirks: npcForm.quirks.trim() || null,
+        voice_notes: npcForm.voice_notes.trim() || null,
+        motivation: npcForm.motivation.trim() || null,
+        location: npcForm.location.trim() || null,
+      })
+      .eq('id', editingNpc.id)
+      .select()
+      .single();
+    if (!error && data) {
+      setNpcs(prev => prev.map(n => n.id === data.id ? data : n));
+    }
+    setShowNpcForm(false);
+    setEditingNpc(null);
+    setSavingNpc(false);
+  };
+
   // ─── Initiative helpers ─────────────────────────────────────
   const addCombatant = () => {
     if (!newCombatant.name.trim()) return;
@@ -350,6 +437,10 @@ export default function SessionView() {
     const motivation = pickRandom(NPC_MOTIVATIONS);
     const voice = pickRandom(NPC_VOICES);
 
+    const currentSession = sessionNotes.length > 0
+      ? Math.max(...sessionNotes.map(n => n.session_number))
+      : 1;
+
     const payload = {
       campaign_id: campaignId,
       name,
@@ -359,6 +450,7 @@ export default function SessionView() {
       quirks: quirk,
       voice_notes: voice,
       motivation,
+      first_session: currentSession,
     };
 
     const { data, error } = await supabase
@@ -599,15 +691,56 @@ export default function SessionView() {
         </button>
 
         {sessionNotes.length > 0 && (
-          <div className="mt-3 max-h-40 overflow-y-auto space-y-2">
-            {sessionNotes.slice(0, 5).map(note => (
+          <div className="mt-3 max-h-60 overflow-y-auto space-y-2">
+            {sessionNotes.map(note => (
               <Card key={note.id} className="!p-2">
-                <p className="text-xs font-cinzel text-domain-text">{note.title}</p>
-                <p className="text-xs font-crimson text-domain-text-dim mt-0.5 line-clamp-2">{note.raw_notes}</p>
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-cinzel text-domain-text">Session {note.session_number}</p>
+                  <div className="flex items-center gap-2">
+                    {note.created_at && (
+                      <span className="text-[10px] font-ui text-domain-text-dim/50 flex items-center gap-1">
+                        <Clock className="w-2.5 h-2.5" />
+                        {new Date(note.created_at).toLocaleDateString()}
+                      </span>
+                    )}
+                    <button onClick={() => startEditNote(note)} className="text-domain-text-dim/40 hover:text-domain-amber cursor-pointer">
+                      <Pencil className="w-3 h-3" />
+                    </button>
+                  </div>
+                </div>
+                {editingNoteId === note.id ? (
+                  <div className="mt-1">
+                    <textarea
+                      value={editNoteText}
+                      onChange={e => setEditNoteText(e.target.value)}
+                      rows={4}
+                      className="w-full px-2 py-1.5 bg-[rgba(15,12,8,0.50)] border border-domain-panel-border/40 rounded text-xs text-domain-text focus:border-eg4h-gold-dark focus:outline-none font-crimson resize-none"
+                      autoFocus
+                    />
+                    <div className="flex gap-2 mt-1">
+                      <button onClick={() => saveEditNote(note.id)} disabled={savingEditNote} className="px-3 py-1 text-[10px] font-cinzel font-semibold text-eg4h-black bg-gradient-to-r from-eg4h-gold to-eg4h-gold-light rounded disabled:opacity-40 cursor-pointer">
+                        {savingEditNote ? 'Saving...' : 'Save'}
+                      </button>
+                      <button onClick={() => { setEditingNoteId(null); setEditNoteText(''); }} className="px-3 py-1 text-[10px] font-ui text-domain-text-dim hover:text-domain-text cursor-pointer">
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-xs font-crimson text-domain-text-dim mt-0.5 line-clamp-3">{note.raw_notes}</p>
+                )}
               </Card>
             ))}
           </div>
         )}
+
+        {/* AI Session Summary placeholder */}
+        <div className="mt-3 p-2 bg-domain-panel/40 border border-domain-panel-border/20 rounded-lg">
+          <div className="flex items-center gap-1.5">
+            <Sparkles className="w-3 h-3 text-domain-text-dim/40" />
+            <span className="text-[10px] font-ui text-domain-text-dim/40">AI session summary coming soon</span>
+          </div>
+        </div>
       </div>
 
       {/* NPCs */}
@@ -653,6 +786,36 @@ export default function SessionView() {
           )}
         </AnimatePresence>
 
+        {/* NPC edit form */}
+        <AnimatePresence>
+          {showNpcForm && editingNpc && (
+            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
+              <Card className="mb-3 !bg-domain-panel-raised">
+                <p className="text-xs font-cinzel text-domain-text mb-2">Edit NPC</p>
+                <div className="space-y-2">
+                  <input type="text" placeholder="Name" value={npcForm.name} onChange={e => setNpcForm(p => ({ ...p, name: e.target.value }))} className="w-full px-3 py-2 bg-[rgba(15,12,8,0.50)] border border-domain-panel-border/40 rounded-lg text-domain-text placeholder-domain-text-dim/40 focus:border-eg4h-gold-dark focus:outline-none font-crimson text-sm" autoFocus />
+                  <div className="grid grid-cols-2 gap-2">
+                    <input type="text" placeholder="Role" value={npcForm.role} onChange={e => setNpcForm(p => ({ ...p, role: e.target.value }))} className="w-full px-3 py-2 bg-[rgba(15,12,8,0.50)] border border-domain-panel-border/40 rounded-lg text-domain-text placeholder-domain-text-dim/40 focus:border-eg4h-gold-dark focus:outline-none font-crimson text-sm" />
+                    <input type="text" placeholder="Location" value={npcForm.location} onChange={e => setNpcForm(p => ({ ...p, location: e.target.value }))} className="w-full px-3 py-2 bg-[rgba(15,12,8,0.50)] border border-domain-panel-border/40 rounded-lg text-domain-text placeholder-domain-text-dim/40 focus:border-eg4h-gold-dark focus:outline-none font-crimson text-sm" />
+                  </div>
+                  <textarea placeholder="Personality" value={npcForm.personality} onChange={e => setNpcForm(p => ({ ...p, personality: e.target.value }))} rows={2} className="w-full px-3 py-2 bg-[rgba(15,12,8,0.50)] border border-domain-panel-border/40 rounded-lg text-domain-text placeholder-domain-text-dim/40 focus:border-eg4h-gold-dark focus:outline-none font-crimson text-sm resize-none" />
+                  <div className="grid grid-cols-2 gap-2">
+                    <input type="text" placeholder="Quirks" value={npcForm.quirks} onChange={e => setNpcForm(p => ({ ...p, quirks: e.target.value }))} className="w-full px-3 py-2 bg-[rgba(15,12,8,0.50)] border border-domain-panel-border/40 rounded-lg text-domain-text placeholder-domain-text-dim/40 focus:border-eg4h-gold-dark focus:outline-none font-crimson text-sm" />
+                    <input type="text" placeholder="Voice notes" value={npcForm.voice_notes} onChange={e => setNpcForm(p => ({ ...p, voice_notes: e.target.value }))} className="w-full px-3 py-2 bg-[rgba(15,12,8,0.50)] border border-domain-panel-border/40 rounded-lg text-domain-text placeholder-domain-text-dim/40 focus:border-eg4h-gold-dark focus:outline-none font-crimson text-sm" />
+                  </div>
+                  <input type="text" placeholder="Motivation / Goal" value={npcForm.motivation} onChange={e => setNpcForm(p => ({ ...p, motivation: e.target.value }))} className="w-full px-3 py-2 bg-[rgba(15,12,8,0.50)] border border-domain-panel-border/40 rounded-lg text-domain-text placeholder-domain-text-dim/40 focus:border-eg4h-gold-dark focus:outline-none font-crimson text-sm" />
+                  <div className="flex gap-2 pt-1">
+                    <button onClick={saveNpcEdit} disabled={!npcForm.name.trim() || savingNpc} className="px-4 py-1.5 text-xs font-cinzel font-semibold text-eg4h-black bg-gradient-to-r from-eg4h-gold to-eg4h-gold-light rounded disabled:opacity-40 disabled:cursor-not-allowed hover:shadow-[0_2px_8px_rgba(255,215,0,0.3)] transition-all cursor-pointer">
+                      {savingNpc ? 'Saving...' : 'Update'}
+                    </button>
+                    <button onClick={() => { setShowNpcForm(false); setEditingNpc(null); }} className="px-3 py-1.5 text-xs font-ui text-domain-text-dim hover:text-domain-text cursor-pointer">Cancel</button>
+                  </div>
+                </div>
+              </Card>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {npcs.length === 0 && !showNpcGen ? (
           <p className="text-xs font-crimson text-domain-text-dim/50 italic">No NPCs yet. Use Quick NPC to generate one.</p>
         ) : (
@@ -679,6 +842,9 @@ export default function SessionView() {
                       <option value="missing" className="bg-domain-dark text-yellow-400">missing</option>
                       <option value="unknown" className="bg-domain-dark text-gray-400">unknown</option>
                     </select>
+                    <button onClick={() => openEditNpc(npc)} className="text-domain-text-dim/40 hover:text-domain-amber cursor-pointer">
+                      <Pencil className="w-3 h-3" />
+                    </button>
                     <button
                       onClick={async () => {
                         if (!supabase) return;
@@ -692,7 +858,13 @@ export default function SessionView() {
                   </div>
                 </div>
                 {npc.role && <p className="text-xs font-crimson text-domain-parchment-dark mt-0.5">{npc.role}</p>}
+                {npc.location && (
+                  <p className="text-xs font-crimson text-domain-text-dim mt-0.5 flex items-center gap-1">
+                    <MapPin className="w-3 h-3 shrink-0" /> {npc.location}
+                  </p>
+                )}
                 {npc.motivation && <p className="text-xs font-crimson text-domain-text-dim mt-0.5">Goal: {npc.motivation}</p>}
+                {npc.first_session && <p className="text-[10px] font-ui text-domain-text-dim/40 mt-0.5">First appeared: Session {npc.first_session}</p>}
                 {npc.personality && <p className="text-xs font-crimson text-domain-text-dim/70 mt-1 italic line-clamp-2">{npc.personality}</p>}
                 {npc.quirks && <p className="text-xs font-crimson text-domain-text-dim/60 mt-0.5">Quirk: {npc.quirks}</p>}
                 {npc.voice_notes && <p className="text-xs font-crimson text-domain-text-dim/60 mt-0.5">Voice: {npc.voice_notes}</p>}
@@ -894,6 +1066,37 @@ export default function SessionView() {
           </div>
         )}
       </div>
+
+      {/* SRD Quick Reference */}
+      {Object.keys(srdRef).length > 0 && (
+        <div>
+          <SectionHeader icon={BookMarked} title="Quick Reference" />
+          <div className="space-y-1">
+            {Object.entries(srdRef).map(([category, entries]) => (
+              <div key={category}>
+                <button
+                  onClick={() => setExpandedSrdCats(prev => ({ ...prev, [category]: !prev[category] }))}
+                  className="w-full flex items-center gap-2 px-2 py-1.5 text-xs font-cinzel text-domain-text hover:text-eg4h-gold bg-domain-panel/40 border border-domain-panel-border/20 rounded transition-colors cursor-pointer"
+                >
+                  <ChevronRight className={`w-3 h-3 transition-transform ${expandedSrdCats[category] ? 'rotate-90' : ''}`} />
+                  {category}
+                  <span className="text-[10px] font-ui text-domain-text-dim/40 ml-auto">{entries.length}</span>
+                </button>
+                {expandedSrdCats[category] && (
+                  <div className="ml-2 border-l border-domain-panel-border/20 pl-2 py-1 space-y-1.5">
+                    {entries.map(entry => (
+                      <div key={entry.id}>
+                        <p className="text-xs font-cinzel text-domain-text">{entry.name}</p>
+                        <p className="text-[11px] font-crimson text-domain-text-dim/70 leading-snug">{entry.description}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 
