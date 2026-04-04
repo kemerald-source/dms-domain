@@ -190,6 +190,7 @@ export default function SessionView() {
   const [showNpcGen, setShowNpcGen] = useState(false);
   const [npcPrompt, setNpcPrompt] = useState('');
   const [generatingNpc, setGeneratingNpc] = useState(false);
+  const [npcAiMode, setNpcAiMode] = useState(null); // null = unset, set on form open
 
   // Right panel state
   const [partyMembers, setPartyMembers] = useState([]);
@@ -540,8 +541,8 @@ export default function SessionView() {
 
     let npcData = null;
 
-    // AI generation for paid tier only
-    if (isDM) try {
+    // AI generation when toggle is on and user has paid tier
+    if (npcAiMode && isDM) try {
       const res = await fetch('/.netlify/functions/ai-assist', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1121,7 +1122,7 @@ export default function SessionView() {
       <div>
         <SectionHeader icon={Users} title={`NPCs${!isDM ? ` (${npcs.length}/${FREE_LIMITS.npcs})` : ''}`}>
           <button
-            onClick={() => setShowNpcGen(v => !v)}
+            onClick={() => { setShowNpcGen(v => !v); if (npcAiMode === null) setNpcAiMode(isDM); }}
             className="flex items-center gap-1 px-2 py-1 text-xs font-ui text-domain-amber border border-domain-panel-border/50 rounded hover:border-eg4h-gold-dark/60 transition-colors cursor-pointer"
           >
             <Dices className="w-3 h-3" /> Quick NPC
@@ -1133,7 +1134,24 @@ export default function SessionView() {
           {showNpcGen && (
             <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
               <Card className="mb-3 !bg-domain-panel-raised">
-                <p className="text-xs font-cinzel text-domain-text mb-2">Quick NPC Generator</p>
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs font-cinzel text-domain-text">Quick NPC Generator</p>
+                  <button
+                    onClick={() => {
+                      if (!npcAiMode && !isDM) {
+                        requireDM('AI-enhanced NPC generation is a Dungeon Master tier feature.');
+                        return;
+                      }
+                      setNpcAiMode(v => !v);
+                    }}
+                    className="flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <span className="text-[10px] font-ui text-domain-text-dim">AI Enhanced</span>
+                    <div className={`w-7 h-4 rounded-full relative transition-colors ${npcAiMode ? 'bg-eg4h-gold/60' : 'bg-domain-panel-border/40'}`}>
+                      <div className={`absolute top-0.5 w-3 h-3 rounded-full transition-all ${npcAiMode ? 'left-3.5 bg-eg4h-gold' : 'left-0.5 bg-domain-text-dim/60'}`} />
+                    </div>
+                  </button>
+                </div>
                 <input
                   type="text"
                   value={npcPrompt}
@@ -1142,7 +1160,9 @@ export default function SessionView() {
                   className="w-full px-3 py-2 bg-[rgba(15,12,8,0.50)] border border-domain-panel-border/40 rounded-lg text-domain-text placeholder-domain-text-dim/40 focus:border-eg4h-gold-dark focus:outline-none font-crimson text-sm"
                   autoFocus
                 />
-                <p className="text-[10px] font-ui text-domain-text-dim/40 mt-1 mb-2">Describe the NPC you need, or leave blank for a random one</p>
+                <p className="text-[10px] font-ui mt-1 mb-2" style={{ color: npcAiMode ? 'rgba(212,160,23,0.6)' : 'rgba(255,255,255,0.25)' }}>
+                  {npcAiMode ? 'AI will embellish your description' : 'Exact details only — no AI embellishment'}
+                </p>
                 <div className="flex gap-2">
                   <button
                     onClick={generateNpc}
