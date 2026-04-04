@@ -9,6 +9,8 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/api/AuthContext';
 import { supabase } from '@/lib/supabase';
+import { useTier, FREE_LIMITS } from '@/lib/tier';
+import UpgradeModal from '@/components/UpgradeModal';
 
 // ─── Tab selector for mobile ────────────────────────────────────
 const TABS = [
@@ -135,6 +137,9 @@ export default function SessionView() {
   const [campaign, setCampaign] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState(() => localStorage.getItem('dmd-active-tab') || 'left');
+  const { tier, isDM } = useTier(user?.email);
+  const [showUpgrade, setShowUpgrade] = useState(false);
+  const [upgradeReason, setUpgradeReason] = useState('');
 
   // Left panel state
   const [npcs, setNpcs] = useState([]);
@@ -199,6 +204,14 @@ export default function SessionView() {
   const [combatRound, setCombatRound] = useState(0);
   const [newCombatant, setNewCombatant] = useState({ name: '', init: '', hp: '' });
   const [showAddCombatant, setShowAddCombatant] = useState(false);
+
+  // ─── Tier gate helper ────────────────────────────────────────
+  const requireDM = (reason) => {
+    if (isDM) return true;
+    setUpgradeReason(reason);
+    setShowUpgrade(true);
+    return false;
+  };
 
   // ─── Auth guard ─────────────────────────────────────────────
   useEffect(() => {
@@ -462,6 +475,14 @@ export default function SessionView() {
   // ─── Quick NPC generator (AI-powered with template fallback) ─
   const generateNpc = async () => {
     if (!supabase) return;
+
+    // Free tier: enforce NPC limit
+    if (!isDM && npcs.length >= FREE_LIMITS.npcs) {
+      setShowNpcGen(false);
+      requireDM(`Free tier allows ${FREE_LIMITS.npcs} NPCs per campaign. Upgrade for unlimited NPCs.`);
+      return;
+    }
+
     setGeneratingNpc(true);
 
     const currentSession = sessionNotes.length > 0
@@ -470,8 +491,8 @@ export default function SessionView() {
 
     let npcData = null;
 
-    // Try AI generation first
-    try {
+    // AI generation for paid tier only
+    if (isDM) try {
       const res = await fetch('/.netlify/functions/ai-assist', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -598,6 +619,7 @@ export default function SessionView() {
 
   // ─── DM secret messaging ────────────────────────────────────
   const toggleMsg = (characterId) => {
+    if (!requireDM('Secret messaging is a Dungeon Master tier feature. Upgrade to send private notes to players.')) return;
     if (openMsgId === characterId) {
       setOpenMsgId(null);
       setMsgText('');
@@ -661,6 +683,10 @@ export default function SessionView() {
 
   // ─── Story thread CRUD ──────────────────────────────────────
   const openNewThread = () => {
+    if (!isDM && threads.length >= FREE_LIMITS.threads) {
+      requireDM(`Free tier allows ${FREE_LIMITS.threads} story threads per campaign. Upgrade for unlimited threads.`);
+      return;
+    }
     setEditingThread(null);
     setThreadForm({ title: '', description: '', thread_type: 'hook', urgency: 'medium' });
     setShowThreadForm(true);
@@ -724,6 +750,10 @@ export default function SessionView() {
 
   // ─── World lore CRUD ──────────────────────────────────────────
   const openNewLore = () => {
+    if (!isDM && lore.length >= FREE_LIMITS.lore) {
+      requireDM(`Free tier allows ${FREE_LIMITS.lore} lore entries per campaign. Upgrade for unlimited world lore.`);
+      return;
+    }
     setEditingLore(null);
     setLoreForm({ name: '', type: 'location', description: '', notes: '' });
     setShowLoreForm(true);
@@ -866,6 +896,7 @@ export default function SessionView() {
             <button
               onClick={async () => {
                 if (summaryLoading) return;
+                if (!requireDM('AI session summaries are a Dungeon Master tier feature. Upgrade for AI-powered session recaps.')) return;
                 setSummaryLoading(true);
                 setSessionSummary(null);
                 try {
@@ -960,7 +991,7 @@ export default function SessionView() {
 
       {/* NPCs */}
       <div>
-        <SectionHeader icon={Users} title="NPCs">
+        <SectionHeader icon={Users} title={`NPCs${!isDM ? ` (${npcs.length}/${FREE_LIMITS.npcs})` : ''}`}>
           <button
             onClick={() => setShowNpcGen(v => !v)}
             className="flex items-center gap-1 px-2 py-1 text-xs font-ui text-domain-amber border border-domain-panel-border/50 rounded hover:border-eg4h-gold-dark/60 transition-colors cursor-pointer"
@@ -1104,7 +1135,7 @@ export default function SessionView() {
     <div className="flex flex-col gap-5 h-full">
       {/* Story Threads */}
       <div>
-        <SectionHeader icon={Scroll} title="Story Threads">
+        <SectionHeader icon={Scroll} title={`Story Threads${!isDM ? ` (${threads.length}/${FREE_LIMITS.threads})` : ''}`}>
           <button onClick={openNewThread} className="flex items-center gap-1 px-2 py-1 text-xs font-ui text-domain-amber border border-domain-panel-border/50 rounded hover:border-eg4h-gold-dark/60 transition-colors cursor-pointer">
             <Plus className="w-3 h-3" /> New Thread
           </button>
@@ -1203,6 +1234,7 @@ export default function SessionView() {
             className={inputClass}
             onKeyDown={async (e) => {
               if (e.key === 'Enter' && improvInput.trim() && !improvLoading) {
+                if (!requireDM('AI Improv Assist is a Dungeon Master tier feature. Upgrade for AI-powered suggestions at the table.')) return;
                 setImprovLoading(true);
                 setImprovSuggestions([]);
                 try {
@@ -1236,6 +1268,7 @@ export default function SessionView() {
           <button
             onClick={async () => {
               if (!improvInput.trim() || improvLoading) return;
+              if (!requireDM('AI Improv Assist is a Dungeon Master tier feature. Upgrade for AI-powered suggestions at the table.')) return;
               setImprovLoading(true);
               setImprovSuggestions([]);
               try {
@@ -1287,7 +1320,7 @@ export default function SessionView() {
 
       {/* World Lore */}
       <div>
-        <SectionHeader icon={Globe} title="World Lore">
+        <SectionHeader icon={Globe} title={`World Lore${!isDM ? ` (${lore.length}/${FREE_LIMITS.lore})` : ''}`}>
           <button onClick={openNewLore} className="flex items-center gap-1 px-2 py-1 text-xs font-ui text-domain-amber border border-domain-panel-border/50 rounded hover:border-eg4h-gold-dark/60 transition-colors cursor-pointer">
             <Plus className="w-3 h-3" /> New Entry
           </button>
@@ -1727,6 +1760,9 @@ export default function SessionView() {
               <p className="font-crimson text-xs text-domain-text-dim truncate">{campaign.description}</p>
             )}
           </div>
+          <span className={`shrink-0 px-2 py-0.5 text-[10px] font-ui rounded-full ${isDM ? 'bg-eg4h-gold/20 text-eg4h-gold border border-eg4h-gold-dark/40' : 'bg-gray-800/50 text-gray-400 border border-gray-700/40'}`}>
+            {isDM ? 'DM' : 'Free'}
+          </span>
         </div>
       </header>
 
@@ -1769,6 +1805,13 @@ export default function SessionView() {
           {activeTab === 'right' && RightPanel}
         </div>
       </div>
+
+      {showUpgrade && (
+        <UpgradeModal
+          onClose={() => setShowUpgrade(false)}
+          reason={upgradeReason}
+        />
+      )}
     </div>
   );
 }

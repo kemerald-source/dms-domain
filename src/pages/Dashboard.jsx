@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Plus, Calendar, Users, Scroll, LogOut, Loader2, Swords, Pencil, Check, X } from 'lucide-react';
+import { Plus, Calendar, Users, Scroll, LogOut, Loader2, Swords, Pencil, Check, X, Crown } from 'lucide-react';
 import { useAuth } from '@/api/AuthContext';
 import { supabase } from '@/lib/supabase';
+import { useTier, FREE_LIMITS } from '@/lib/tier';
+import UpgradeModal from '@/components/UpgradeModal';
 
 export default function Dashboard() {
   const { user, isAuthenticated, loading: authLoading, login, logout } = useAuth();
@@ -19,6 +21,9 @@ export default function Dashboard() {
   const [editingDescId, setEditingDescId] = useState(null);
   const [editDescText, setEditDescText] = useState('');
   const [savingDesc, setSavingDesc] = useState(false);
+  const [showUpgrade, setShowUpgrade] = useState(false);
+  const [upgradeReason, setUpgradeReason] = useState('');
+  const { tier, isDM } = useTier(user?.email);
 
   // Redirect to login if not authenticated
   useEffect(() => {
@@ -182,6 +187,9 @@ export default function Dashboard() {
             <span className="text-domain-text-dim text-sm font-ui hidden sm:block">
               {user?.name || user?.email}
             </span>
+            <span className={`px-2 py-0.5 text-[10px] font-ui rounded-full ${isDM ? 'bg-eg4h-gold/20 text-eg4h-gold border border-eg4h-gold-dark/40' : 'bg-gray-800/50 text-gray-400 border border-gray-700/40'}`}>
+              {isDM ? 'Dungeon Master' : 'Free'}
+            </span>
             {user?.avatar && (
               <img src={user.avatar} alt="" className="w-8 h-8 rounded-full border border-eg4h-gold-dark/50" />
             )}
@@ -201,7 +209,14 @@ export default function Dashboard() {
         <div className="flex items-center justify-between mb-8">
           <h2 className="font-cinzel text-2xl md:text-3xl text-domain-text">Your Campaigns</h2>
           <button
-            onClick={() => setShowCreate(true)}
+            onClick={() => {
+              if (!isDM && campaigns.length >= FREE_LIMITS.campaigns) {
+                setUpgradeReason('Free tier allows 1 campaign. Upgrade to create unlimited campaigns.');
+                setShowUpgrade(true);
+              } else {
+                setShowCreate(true);
+              }
+            }}
             className="flex items-center gap-2 px-5 py-2.5 font-cinzel text-sm font-semibold text-eg4h-black bg-gradient-to-r from-eg4h-gold to-eg4h-gold-light rounded-lg shadow-[0_2px_10px_rgba(255,215,0,0.3)] hover:shadow-[0_2px_15px_rgba(255,215,0,0.5)] transition-all hover:scale-105 cursor-pointer"
           >
             <Plus className="w-4 h-4" />
@@ -398,6 +413,13 @@ export default function Dashboard() {
           </div>
         )}
       </main>
+
+      {showUpgrade && (
+        <UpgradeModal
+          onClose={() => setShowUpgrade(false)}
+          reason={upgradeReason}
+        />
+      )}
     </div>
   );
 }
