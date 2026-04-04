@@ -155,6 +155,12 @@ export default function SessionView() {
   const [threads, setThreads] = useState([]);
   const [lore, setLore] = useState([]);
   const [improvInput, setImprovInput] = useState('');
+  const [improvSuggestions, setImprovSuggestions] = useState([]);
+  const [improvLoading, setImprovLoading] = useState(false);
+
+  // Session summary state
+  const [sessionSummary, setSessionSummary] = useState(null);
+  const [summaryLoading, setSummaryLoading] = useState(false);
 
   // Story thread form state
   const [showThreadForm, setShowThreadForm] = useState(false);
@@ -442,37 +448,66 @@ export default function SessionView() {
     setCombatants(prev => [...prev, ...partyCombatants].sort((a, b) => b.init - a.init));
   };
 
-  // ─── Quick NPC generator ────────────────────────────────────
+  // ─── Quick NPC generator (AI-powered with template fallback) ─
   const generateNpc = async () => {
     if (!supabase) return;
     setGeneratingNpc(true);
-
-    const name = `${pickRandom(NPC_FIRST)} ${pickRandom(NPC_LAST)}`;
-    const role = npcPrompt.trim() ? detectRole(npcPrompt) : pickRandom(Object.values(NPC_ROLES));
-    const personality = pickRandom(NPC_PERSONALITIES);
-    const quirk = pickRandom(NPC_QUIRKS);
-    const motivation = pickRandom(NPC_MOTIVATIONS);
-    const voice = pickRandom(NPC_VOICES);
 
     const currentSession = sessionNotes.length > 0
       ? Math.max(...sessionNotes.map(n => n.session_number))
       : 1;
 
-    const payload = {
-      campaign_id: campaignId,
-      name,
-      role,
-      status: 'alive',
-      personality,
-      quirks: quirk,
-      voice_notes: voice,
-      motivation,
-      first_session: currentSession,
-    };
+    let npcData = null;
+
+    // Try AI generation first
+    try {
+      const res = await fetch('/.netlify/functions/ai-assist', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'npc',
+          prompt: npcPrompt.trim() || 'a random NPC the party might encounter in a fantasy town',
+          context: {
+            campaignName: campaign?.name,
+            campaignDescription: campaign?.description,
+            npcs: npcs.slice(0, 10).map(n => ({ name: n.name, role: n.role })),
+          },
+        }),
+      });
+
+      if (res.ok) {
+        const { result } = await res.json();
+        if (result?.name) npcData = result;
+      }
+    } catch (err) {
+      console.warn('AI NPC generation failed, using template fallback:', err.message);
+    }
+
+    // Template fallback if AI fails
+    if (!npcData) {
+      npcData = {
+        name: `${pickRandom(NPC_FIRST)} ${pickRandom(NPC_LAST)}`,
+        role: npcPrompt.trim() ? detectRole(npcPrompt) : pickRandom(Object.values(NPC_ROLES)),
+        personality: pickRandom(NPC_PERSONALITIES),
+        quirks: pickRandom(NPC_QUIRKS),
+        motivation: pickRandom(NPC_MOTIVATIONS),
+        voice_notes: pickRandom(NPC_VOICES),
+      };
+    }
 
     const { data, error } = await supabase
       .from('npcs')
-      .insert(payload)
+      .insert({
+        campaign_id: campaignId,
+        name: npcData.name,
+        role: npcData.role || null,
+        status: 'alive',
+        personality: npcData.personality || null,
+        quirks: npcData.quirks || null,
+        voice_notes: npcData.voice_notes || null,
+        motivation: npcData.motivation || null,
+        first_session: currentSession,
+      })
       .select()
       .single();
 
@@ -807,13 +842,92 @@ export default function SessionView() {
           </div>
         )}
 
-        {/* AI Session Summary placeholder */}
-        <div className="mt-3 p-2 bg-domain-panel/40 border border-domain-panel-border/20 rounded-lg">
-          <div className="flex items-center gap-1.5">
-            <Sparkles className="w-3 h-3 text-domain-text-dim/40" />
-            <span className="text-[10px] font-ui text-domain-text-dim/40">AI session summary coming soon</span>
+        {/* AI Session Summary */}
+        {sessionNotes.length > 0 && (
+          <div className="mt-3">
+            <button
+              onClick={async () => {
+                if (summaryLoading) return;
+                setSummaryLoading(true);
+                setSessionSummary(null);
+                try {
+                  const allNotes = sessionNotes.map(n => `Session ${n.session_number}: ${n.raw_notes}`).join('\n\n');
+                  const res = await fetch('/.netlify/functions/ai-assist', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      type: 'summary',
+                      prompt: 'Summarize these session notes.',
+                      context: {
+                        campaignName: campaign?.name,
+                        campaignDescription: campaign?.description,
+                        sessionNotes: allNotes,
+                      },
+                    }),
+                  });
+                  if (res.ok) {
+                    const { result, raw } = await res.json();
+                    setSessionSummary(result || { narrative_summary: raw || 'Could not generate summary.' });
+                  }
+                } catch (err) {
+                  console.error('Summary generation error:', err);
+                  setSessionSummary({ narrative_summary: 'AI summary unavailable — try again later.' });
+                }
+                setSummaryLoading(false);
+              }}
+              disabled={summaryLoading}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-ui text-domain-amber border border-domain-panel-border/40 rounded hover:border-eg4h-gold-dark/60 transition-colors cursor-pointer disabled:opacity-40"
+            >
+              {summaryLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+              {summaryLoading ? 'Generating...' : 'Generate Summary'}
+            </button>
+
+            {sessionSummary && (
+              <div className="mt-2 p-3 bg-domain-panel/40 border border-domain-panel-border/20 rounded-lg space-y-2">
+                {sessionSummary.key_events?.length > 0 && (
+                  <div>
+                    <p className="text-[10px] font-cinzel text-domain-text mb-1">Key Events</p>
+                    <ul className="space-y-0.5">
+                      {sessionSummary.key_events.map((e, i) => (
+                        <li key={i} className="text-xs font-crimson text-domain-text-dim flex items-start gap-1.5">
+                          <span className="text-domain-amber/60 shrink-0">-</span> {e}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {sessionSummary.npcs_encountered?.length > 0 && (
+                  <div>
+                    <p className="text-[10px] font-cinzel text-domain-text mb-1">NPCs Encountered</p>
+                    {sessionSummary.npcs_encountered.map((n, i) => (
+                      <p key={i} className="text-xs font-crimson text-domain-text-dim">
+                        <span className="text-domain-text">{n.name}</span> — {n.details}
+                      </p>
+                    ))}
+                  </div>
+                )}
+                {sessionSummary.unresolved_threads?.length > 0 && (
+                  <div>
+                    <p className="text-[10px] font-cinzel text-domain-text mb-1">Unresolved Threads</p>
+                    <ul className="space-y-0.5">
+                      {sessionSummary.unresolved_threads.map((t, i) => (
+                        <li key={i} className="text-xs font-crimson text-domain-text-dim flex items-start gap-1.5">
+                          <span className="text-domain-amber/60 shrink-0">?</span> {t}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {sessionSummary.narrative_summary && (
+                  <div>
+                    <p className="text-[10px] font-cinzel text-domain-text mb-1">Summary</p>
+                    <p className="text-xs font-crimson text-domain-text-dim italic">{sessionSummary.narrative_summary}</p>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
-        </div>
+        )}
       </div>
 
       {/* NPCs */}
@@ -1057,14 +1171,90 @@ export default function SessionView() {
             type="text"
             value={improvInput}
             onChange={e => setImprovInput(e.target.value)}
-            placeholder="Ask for an improv suggestion..."
+            placeholder="The party just did something unexpected..."
             className={inputClass}
+            onKeyDown={async (e) => {
+              if (e.key === 'Enter' && improvInput.trim() && !improvLoading) {
+                setImprovLoading(true);
+                setImprovSuggestions([]);
+                try {
+                  const res = await fetch('/.netlify/functions/ai-assist', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      type: 'improv',
+                      prompt: improvInput.trim(),
+                      context: {
+                        campaignName: campaign?.name,
+                        campaignDescription: campaign?.description,
+                        npcs: npcs.slice(0, 10).map(n => ({ name: n.name, role: n.role })),
+                        threads: threads.slice(0, 5).map(t => ({ title: t.title })),
+                      },
+                    }),
+                  });
+                  if (res.ok) {
+                    const { result, raw } = await res.json();
+                    if (result?.suggestions) setImprovSuggestions(result.suggestions);
+                    else if (raw) setImprovSuggestions([raw]);
+                  }
+                } catch (err) {
+                  console.error('Improv assist error:', err);
+                  setImprovSuggestions(['AI assist unavailable — try again later.']);
+                }
+                setImprovLoading(false);
+              }
+            }}
           />
-          <button className="px-3 py-2 text-xs font-ui text-domain-amber border border-domain-warm/40 rounded-lg hover:border-eg4h-gold-dark/60 transition-colors cursor-pointer opacity-50" disabled>
-            <Sparkles className="w-4 h-4" />
+          <button
+            onClick={async () => {
+              if (!improvInput.trim() || improvLoading) return;
+              setImprovLoading(true);
+              setImprovSuggestions([]);
+              try {
+                const res = await fetch('/.netlify/functions/ai-assist', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    type: 'improv',
+                    prompt: improvInput.trim(),
+                    context: {
+                      campaignName: campaign?.name,
+                      campaignDescription: campaign?.description,
+                      npcs: npcs.slice(0, 10).map(n => ({ name: n.name, role: n.role })),
+                      threads: threads.slice(0, 5).map(t => ({ title: t.title })),
+                    },
+                  }),
+                });
+                if (res.ok) {
+                  const { result, raw } = await res.json();
+                  if (result?.suggestions) setImprovSuggestions(result.suggestions);
+                  else if (raw) setImprovSuggestions([raw]);
+                }
+              } catch (err) {
+                console.error('Improv assist error:', err);
+                setImprovSuggestions(['AI assist unavailable — try again later.']);
+              }
+              setImprovLoading(false);
+            }}
+            disabled={!improvInput.trim() || improvLoading}
+            className="px-3 py-2 text-xs font-ui text-domain-amber border border-domain-warm/40 rounded-lg hover:border-eg4h-gold-dark/60 transition-colors cursor-pointer disabled:opacity-40"
+          >
+            {improvLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
           </button>
         </div>
-        <p className="text-[10px] font-ui text-domain-text-dim/40 mt-1">AI assist coming soon</p>
+        <p className="text-[10px] font-ui text-domain-text-dim/40 mt-1">Press Enter or click to get AI suggestions</p>
+
+        {/* Improv suggestions */}
+        {improvSuggestions.length > 0 && (
+          <div className="mt-2 space-y-1.5">
+            {improvSuggestions.map((s, i) => (
+              <div key={i} className="flex items-start gap-2 p-2 bg-domain-panel/40 border border-domain-panel-border/20 rounded-lg">
+                <Sparkles className="w-3 h-3 text-domain-amber/60 shrink-0 mt-0.5" />
+                <p className="text-xs font-crimson text-domain-text-dim">{s}</p>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* World Lore */}
