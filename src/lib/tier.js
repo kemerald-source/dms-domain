@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 
 // ─── Admin tier override ─────────────────────────────────────
-const ADMIN_EMAILS = ['kcolburn@eg4h.net'];
+const ADMIN_EMAILS = ['kcolburn@eg4h.net', 'centersfocus@gmail.com'];
 
 // ─── Free tier limits ────────────────────────────────────────
 export const FREE_LIMITS = {

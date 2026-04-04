@@ -2,7 +2,7 @@
 // Checks admin override, then Stripe for active subscriptions
 // to DMD or Bundle products.
 
-const ADMIN_EMAILS = ['kcolburn@eg4h.net'];
+const ADMIN_EMAILS = ['kcolburn@eg4h.net', 'centersfocus@gmail.com'];
 
 const DMD_PRODUCT_ID = 'prod_UH5JJZwg8AdVaI';
 const BUNDLE_PRODUCT_ID = 'prod_UH5KKwFpmJ46aw';
