@@ -600,20 +600,27 @@ export default function SessionView() {
     if (!msgText.trim() || !supabase || !user?.email) return;
     setSendingMsg(true);
 
+    const payload = {
+      campaign_id: campaignId,
+      from_email: user.email,
+      to_email: toEmail || user.email,
+      message: msgText.trim(),
+      to_character_id: characterId,
+    };
+
+    console.log('[DM Message] Inserting:', payload);
+
     const { data, error } = await supabase
       .from('dm_messages')
-      .insert({
-        campaign_id: campaignId,
-        from_email: user.email,
-        to_email: toEmail || null,
-        to_character_id: characterId,
-        message: msgText.trim(),
-        is_read: false,
-      })
+      .insert(payload)
       .select()
       .single();
 
-    if (error) console.error('Message send failed:', error.message);
+    console.log('[DM Message] Result:', { data, error });
+
+    if (error) {
+      console.error('Message send failed:', error.message, error.details, error.hint, error.code);
+    }
 
     if (!error && data) {
       setDmMessages(prev => ({
