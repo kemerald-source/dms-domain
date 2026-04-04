@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   ArrowLeft, Loader2, Plus, Trash2, Swords, BookOpen, Users,
   Scroll, Sparkles, Globe, ChevronUp, ChevronDown, Shield,
-  Heart, Eye, X, GripVertical, Pencil, Save,
+  Heart, Eye, X, GripVertical, Pencil, Save, Lock, EyeOff, Dices,
 } from 'lucide-react';
 import { useAuth } from '@/api/AuthContext';
 import { supabase } from '@/lib/supabase';
@@ -55,6 +55,25 @@ const URGENCY_COLORS = {
   high: 'border-orange-800/50',
   critical: 'border-red-800/50',
 };
+
+// ─── Quick NPC generator data ───────────────────────────────
+const NPC_FIRST = ['Aldric','Brenna','Cedric','Delara','Eamon','Fiona','Gareth','Helena','Idris','Jasira','Kael','Lyria','Magnus','Nara','Orin','Petra','Quinn','Rowan','Sable','Theron','Ursa','Vesper','Wren','Xara','Yoren','Zella','Dorian','Elara','Fenwick','Greta','Haldan','Isolde','Jorik','Kessa','Lothar','Miriel','Niles','Olwen','Phelan','Rhiannon','Stellan','Tova','Ulfric','Vara','Wynne'];
+const NPC_LAST = ['Ashford','Blackthorn','Copperfield','Duskwalker','Emberstone','Foxglove','Greymane','Holloway','Ironforge','Jasperwind','Knightley','Larkwood','Moonvale','Nighthollow','Oakhart','Pinecrest','Quillbrook','Ravenscar','Stormhaven','Thornwall','Underhill','Vexley','Whitmore','Yarrow','Zephyrs'];
+const NPC_ROLES = { shopkeeper: 'Shopkeeper', merchant: 'Merchant', guard: 'Town Guard', noble: 'Noble', bartender: 'Bartender', innkeeper: 'Innkeeper', blacksmith: 'Blacksmith', priest: 'Priest', beggar: 'Beggar', farmer: 'Farmer', sailor: 'Sailor', scholar: 'Scholar', thief: 'Thief', bard: 'Traveling Bard', witch: 'Hedge Witch', hunter: 'Hunter', courier: 'Courier', healer: 'Healer', mayor: 'Town Elder', captain: 'Guard Captain', wizard: 'Wizard', alchemist: 'Alchemist', spy: 'Spy', assassin: 'Assassin' };
+const NPC_PERSONALITIES = ['Warm and welcoming, always offering tea','Suspicious of strangers, speaks in clipped sentences','Overly cheerful, deflects serious topics with jokes','Melancholic and wistful, often lost in thought','Brash and confident, talks over others','Quiet and observant, notices everything','Nervous and fidgety, avoids eye contact','Sarcastic and dry, hides kindness behind wit','Fiercely loyal, protective of their community','Greedy and calculating, always angling for profit','Devoutly religious, quotes scripture constantly','Haunted by past mistakes, seeks redemption','Ambitious and ruthless, always scheming','Kind but naive, trusts too easily','Gruff exterior hiding a heart of gold'];
+const NPC_QUIRKS = ['Constantly polishes the same spot on the counter','Collects unusual buttons and shows them to anyone who will look','Hums an eerie tune under their breath','Always carries a worn letter they never open','Speaks to an invisible companion','Has a distinctive laugh that fills the room','Taps their fingers in a rhythmic pattern when thinking','Squints at people as if trying to remember them','Offers unsolicited advice about everything','Always eating something, crumbs everywhere','Refers to themselves in the third person','Ends every sentence with a proverb or saying','Has a pet rat/toad/raven on their shoulder','Sketches people they meet in a small journal','Limps slightly but refuses to explain why'];
+const NPC_MOTIVATIONS = ['Protecting a dark family secret','Paying off a massive debt to a dangerous creditor','Searching for a missing loved one','Trying to leave town before something bad happens','Building enough wealth to retire somewhere warm','Atoning for a crime no one knows about','Gathering information for a mysterious patron','Keeping the peace at any cost','Hoarding supplies for an anticipated disaster','Winning the affection of someone out of their league','Hiding from someone or something from their past','Seeking revenge for a wrong done long ago','Collecting rare ingredients for a special purpose','Proving themselves worthy to their family','Uncovering the truth behind local disappearances'];
+const NPC_VOICES = ['Low and gravelly, pauses often','High-pitched and rapid, barely stops for breath','Thick regional accent, uses local slang','Formal and precise, never uses contractions','Whispers conspiratorially, even about mundane things','Booming and theatrical, gestures wildly','Soft and melodic, almost singing','Stutters when nervous, which is often','Speaks very slowly and deliberately','Raspy, as if recovering from illness','Clipped military cadence','Warm and motherly/fatherly tone','Monotone and flat, hard to read','Excitable, pitch rises when interested','Speaks through clenched teeth, barely moving lips'];
+
+function pickRandom(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+function detectRole(desc) {
+  const lower = desc.toLowerCase();
+  for (const [keyword, role] of Object.entries(NPC_ROLES)) {
+    if (lower.includes(keyword)) return role;
+  }
+  return 'Commoner';
+}
 
 // ─── Extract stats from CE character_data ───────────────────
 function parseCharStats(cd) {
@@ -135,8 +154,17 @@ export default function SessionView() {
   const [loreForm, setLoreForm] = useState({ name: '', type: 'location', description: '', notes: '' });
   const [savingLore, setSavingLore] = useState(false);
 
+  // Quick NPC state
+  const [showNpcGen, setShowNpcGen] = useState(false);
+  const [npcPrompt, setNpcPrompt] = useState('');
+  const [generatingNpc, setGeneratingNpc] = useState(false);
+
   // Right panel state
   const [partyMembers, setPartyMembers] = useState([]);
+  const [dmNotes, setDmNotes] = useState({});
+  const [openNoteId, setOpenNoteId] = useState(null);
+  const [noteText, setNoteText] = useState('');
+  const [savingDmNote, setSavingDmNote] = useState(false);
   const [combatants, setCombatants] = useState([]);
   const [combatRound, setCombatRound] = useState(0);
   const [newCombatant, setNewCombatant] = useState({ name: '', init: '', hp: '' });
@@ -181,7 +209,7 @@ export default function SessionView() {
       setLore(loreRes.data || []);
       setSessionNotes(noteRes.data || []);
 
-      // Party members with character data — exclude DM entries
+      // Party members with character data — exclude DM entries and DM email
       if (camp.party_id) {
         const { data: members } = await supabase
           .from('party_members')
@@ -189,7 +217,12 @@ export default function SessionView() {
           .eq('party_id', camp.party_id);
 
         if (members?.length) {
-          const players = members.filter(m => m.role !== 'dm' && m.character_id);
+          const dmEmail = (camp.dm_email || user.email || '').toLowerCase();
+          const players = members.filter(m =>
+            m.role !== 'dm' &&
+            m.character_id &&
+            (!m.email || m.email.toLowerCase() !== dmEmail)
+          );
           const charIds = players.map(m => m.character_id);
 
           if (charIds.length > 0) {
@@ -205,6 +238,20 @@ export default function SessionView() {
               ...m,
               character: charMap[m.character_id] || null,
             })));
+
+            // Fetch DM secret notes for these characters
+            const { data: notes } = await supabase
+              .from('dm_character_notes')
+              .select('*')
+              .eq('campaign_id', campaignId)
+              .eq('dm_email', user.email)
+              .in('character_id', charIds);
+
+            if (notes?.length) {
+              const noteMap = {};
+              notes.forEach(n => { noteMap[n.character_id] = n; });
+              setDmNotes(noteMap);
+            }
           }
         }
       }
@@ -289,6 +336,105 @@ export default function SessionView() {
         };
       });
     setCombatants(prev => [...prev, ...partyCombatants].sort((a, b) => b.init - a.init));
+  };
+
+  // ─── Quick NPC generator ────────────────────────────────────
+  const generateNpc = async () => {
+    if (!supabase) return;
+    setGeneratingNpc(true);
+
+    const name = `${pickRandom(NPC_FIRST)} ${pickRandom(NPC_LAST)}`;
+    const role = npcPrompt.trim() ? detectRole(npcPrompt) : pickRandom(Object.values(NPC_ROLES));
+    const personality = pickRandom(NPC_PERSONALITIES);
+    const quirk = pickRandom(NPC_QUIRKS);
+    const motivation = pickRandom(NPC_MOTIVATIONS);
+    const voice = pickRandom(NPC_VOICES);
+
+    const description = npcPrompt.trim() || null;
+    const fullPersonality = `${personality}. Quirk: ${quirk}. Voice: ${voice}`;
+
+    const { data, error } = await supabase
+      .from('npcs')
+      .insert({
+        campaign_id: campaignId,
+        name,
+        role,
+        status: 'alive',
+        personality: fullPersonality,
+        motivation,
+        description,
+      })
+      .select()
+      .single();
+
+    if (!error && data) {
+      setNpcs(prev => [data, ...prev]);
+    }
+
+    setNpcPrompt('');
+    setShowNpcGen(false);
+    setGeneratingNpc(false);
+  };
+
+  // ─── DM secret notes ──────────────────────────────────────────
+  const toggleDmNote = (characterId) => {
+    if (openNoteId === characterId) {
+      setOpenNoteId(null);
+      setNoteText('');
+    } else {
+      setOpenNoteId(characterId);
+      setNoteText(dmNotes[characterId]?.notes || '');
+    }
+  };
+
+  const saveDmNote = async (characterId) => {
+    if (!supabase || !user?.email) return;
+    setSavingDmNote(true);
+
+    const existing = dmNotes[characterId];
+    if (existing) {
+      const { data, error } = await supabase
+        .from('dm_character_notes')
+        .update({ notes: noteText.trim() })
+        .eq('id', existing.id)
+        .select()
+        .single();
+      if (!error && data) {
+        setDmNotes(prev => ({ ...prev, [characterId]: data }));
+      }
+    } else {
+      const { data, error } = await supabase
+        .from('dm_character_notes')
+        .insert({
+          campaign_id: campaignId,
+          character_id: characterId,
+          dm_email: user.email,
+          notes: noteText.trim(),
+        })
+        .select()
+        .single();
+      if (!error && data) {
+        setDmNotes(prev => ({ ...prev, [characterId]: data }));
+      }
+    }
+
+    setSavingDmNote(false);
+  };
+
+  const deleteDmNote = async (characterId) => {
+    if (!supabase) return;
+    const existing = dmNotes[characterId];
+    if (!existing) return;
+    const { error } = await supabase.from('dm_character_notes').delete().eq('id', existing.id);
+    if (!error) {
+      setDmNotes(prev => {
+        const next = { ...prev };
+        delete next[characterId];
+        return next;
+      });
+      setOpenNoteId(null);
+      setNoteText('');
+    }
   };
 
   // ─── Story thread CRUD ──────────────────────────────────────
@@ -463,12 +609,47 @@ export default function SessionView() {
       {/* NPCs */}
       <div>
         <SectionHeader icon={Users} title="NPCs">
-          <button className="flex items-center gap-1 px-2 py-1 text-xs font-ui text-domain-amber border border-domain-panel-border/50 rounded hover:border-eg4h-gold-dark/60 transition-colors cursor-pointer">
-            <Sparkles className="w-3 h-3" /> Quick NPC
+          <button
+            onClick={() => setShowNpcGen(v => !v)}
+            className="flex items-center gap-1 px-2 py-1 text-xs font-ui text-domain-amber border border-domain-panel-border/50 rounded hover:border-eg4h-gold-dark/60 transition-colors cursor-pointer"
+          >
+            <Dices className="w-3 h-3" /> Quick NPC
           </button>
         </SectionHeader>
 
-        {npcs.length === 0 ? (
+        {/* Quick NPC generator form */}
+        <AnimatePresence>
+          {showNpcGen && (
+            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
+              <Card className="mb-3 !bg-domain-panel-raised">
+                <p className="text-xs font-cinzel text-domain-text mb-2">Quick NPC Generator</p>
+                <input
+                  type="text"
+                  value={npcPrompt}
+                  onChange={e => setNpcPrompt(e.target.value)}
+                  placeholder="a nervous shopkeeper who owes money to the thieves' guild"
+                  className="w-full px-3 py-2 bg-[rgba(15,12,8,0.50)] border border-domain-panel-border/40 rounded-lg text-domain-text placeholder-domain-text-dim/40 focus:border-eg4h-gold-dark focus:outline-none font-crimson text-sm"
+                  autoFocus
+                />
+                <p className="text-[10px] font-ui text-domain-text-dim/40 mt-1 mb-2">Describe the NPC you need, or leave blank for a random one</p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={generateNpc}
+                    disabled={generatingNpc}
+                    className="px-4 py-1.5 text-xs font-cinzel font-semibold text-eg4h-black bg-gradient-to-r from-eg4h-gold to-eg4h-gold-light rounded disabled:opacity-40 disabled:cursor-not-allowed hover:shadow-[0_2px_8px_rgba(255,215,0,0.3)] transition-all cursor-pointer"
+                  >
+                    {generatingNpc ? 'Generating...' : 'Generate'}
+                  </button>
+                  <button onClick={() => { setShowNpcGen(false); setNpcPrompt(''); }} className="px-3 py-1.5 text-xs font-ui text-domain-text-dim hover:text-domain-text cursor-pointer">
+                    Cancel
+                  </button>
+                </div>
+              </Card>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {npcs.length === 0 && !showNpcGen ? (
           <p className="text-xs font-crimson text-domain-text-dim/50 italic">No NPCs yet. Use Quick NPC to generate one.</p>
         ) : (
           <div className="space-y-2 max-h-64 overflow-y-auto">
@@ -481,8 +662,9 @@ export default function SessionView() {
                   </span>
                 </div>
                 {npc.role && <p className="text-xs font-crimson text-domain-parchment-dark mt-0.5">{npc.role}</p>}
-                {npc.location && <p className="text-xs font-crimson text-domain-text-dim mt-0.5">{npc.location}</p>}
-                {npc.personality && <p className="text-xs font-crimson text-domain-text-dim/70 mt-1 italic line-clamp-2">{npc.personality}</p>}
+                {npc.motivation && <p className="text-xs font-crimson text-domain-text-dim mt-0.5">Goal: {npc.motivation}</p>}
+                {npc.description && <p className="text-xs font-crimson text-domain-text-dim/60 mt-0.5">{npc.description}</p>}
+                {npc.personality && <p className="text-xs font-crimson text-domain-text-dim/70 mt-1 italic line-clamp-3">{npc.personality}</p>}
               </Card>
             ))}
           </div>
@@ -700,15 +882,29 @@ export default function SessionView() {
           <div className="space-y-2">
             {partyMembers.map(m => {
               const stats = parseCharStats(m.character);
+              const hasNotes = !!dmNotes[m.character_id]?.notes;
+              const isOpen = openNoteId === m.character_id;
               return (
                 <Card key={m.id}>
                   <div className="flex items-center justify-between">
-                    <span className="font-cinzel text-sm text-domain-text">{stats.name}</span>
-                    {stats.charClass && (
-                      <span className="text-xs font-ui text-domain-parchment-dark">
-                        {stats.charClass}{stats.level ? ` ${stats.level}` : ''}
-                      </span>
-                    )}
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-cinzel text-sm text-domain-text">{stats.name}</span>
+                      {hasNotes && !isOpen && <Lock className="w-3 h-3 text-domain-amber/60" />}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {stats.charClass && (
+                        <span className="text-xs font-ui text-domain-parchment-dark">
+                          {stats.charClass}{stats.level ? ` ${stats.level}` : ''}
+                        </span>
+                      )}
+                      <button
+                        onClick={() => toggleDmNote(m.character_id)}
+                        className={`p-0.5 rounded transition-colors cursor-pointer ${isOpen ? 'text-domain-amber' : 'text-domain-text-dim/40 hover:text-domain-amber'}`}
+                        title="DM Notes"
+                      >
+                        <EyeOff className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
                   <div className="flex gap-4 mt-1.5 text-xs font-ui text-domain-text-dim">
                     <span className="flex items-center gap-1"><Shield className="w-3 h-3" /> AC {stats.ac}</span>
@@ -719,6 +915,44 @@ export default function SessionView() {
                       </span>
                     )}
                   </div>
+
+                  {/* DM Secret Notes area */}
+                  <AnimatePresence>
+                    {isOpen && (
+                      <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
+                        <div className="mt-2 pt-2 border-t border-domain-panel-border/30">
+                          <div className="flex items-center gap-1.5 mb-1.5">
+                            <Lock className="w-3 h-3 text-domain-amber/80" />
+                            <span className="text-[10px] font-ui text-domain-amber/80">DM Eyes Only</span>
+                          </div>
+                          <textarea
+                            value={noteText}
+                            onChange={e => setNoteText(e.target.value)}
+                            placeholder="Secret notes about this character..."
+                            rows={3}
+                            className="w-full px-2 py-1.5 bg-[rgba(15,12,8,0.60)] border border-domain-amber/20 rounded text-xs text-domain-text placeholder-domain-text-dim/40 focus:border-domain-amber/50 focus:outline-none font-crimson resize-none"
+                          />
+                          <div className="flex gap-2 mt-1.5">
+                            <button
+                              onClick={() => saveDmNote(m.character_id)}
+                              disabled={savingDmNote}
+                              className="px-3 py-1 text-[10px] font-cinzel font-semibold text-eg4h-black bg-gradient-to-r from-eg4h-gold to-eg4h-gold-light rounded disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                            >
+                              {savingDmNote ? 'Saving...' : 'Save'}
+                            </button>
+                            {hasNotes && (
+                              <button
+                                onClick={() => deleteDmNote(m.character_id)}
+                                className="px-3 py-1 text-[10px] font-ui text-red-400/70 hover:text-red-400 cursor-pointer"
+                              >
+                                Delete
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </Card>
               );
             })}
