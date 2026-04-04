@@ -144,11 +144,13 @@ export default function SessionView() {
   // Left panel state
   const [npcs, setNpcs] = useState([]);
   const [sessionNotes, setSessionNotes] = useState([]);
+  const [activeSessionNum, setActiveSessionNum] = useState(null);
   const [liveNote, setLiveNote] = useState('');
   const [savingNote, setSavingNote] = useState(false);
   const [editingNoteId, setEditingNoteId] = useState(null);
   const [editNoteText, setEditNoteText] = useState('');
   const [savingEditNote, setSavingEditNote] = useState(false);
+  const [creatingSess, setCreatingSess] = useState(false);
 
   // NPC edit form state
   const [showNpcForm, setShowNpcForm] = useState(false);
@@ -251,17 +253,12 @@ export default function SessionView() {
       setNpcs(npcRes.data || []);
       setThreads(threadRes.data || []);
       setLore(loreRes.data || []);
-      setSessionNotes(noteRes.data || []);
+      const notes = noteRes.data || [];
+      setSessionNotes(notes);
 
-      // Restore persisted AI summary from the most recent note that has one
-      const notesWithSummary = (noteRes.data || []).filter(n => n.ai_summary);
-      if (notesWithSummary.length > 0) {
-        try {
-          const parsed = typeof notesWithSummary[0].ai_summary === 'string'
-            ? JSON.parse(notesWithSummary[0].ai_summary)
-            : notesWithSummary[0].ai_summary;
-          setSessionSummary(parsed);
-        } catch { /* ignore parse errors */ }
+      // Select the most recent session by default
+      if (notes.length > 0) {
+        setActiveSessionNum(notes[0].session_number);
       }
 
       // Group SRD entries by category
@@ -333,10 +330,10 @@ export default function SessionView() {
     load();
   }, [user?.email, campaignId]);
 
-  // ─── Save a live session note ───────────────────────────────
-  const saveNote = async () => {
-    if (!liveNote.trim() || !supabase) return;
-    setSavingNote(true);
+  // ─── Start a new session ─────────────────────────────────────
+  const startNewSession = async () => {
+    if (!supabase) return;
+    setCreatingSess(true);
 
     const nextNumber = sessionNotes.length > 0
       ? Math.max(...sessionNotes.map(n => n.session_number)) + 1
@@ -348,14 +345,65 @@ export default function SessionView() {
         campaign_id: campaignId,
         session_number: nextNumber,
         title: `Session ${nextNumber}`,
-        raw_notes: liveNote.trim(),
+        raw_notes: '',
       })
       .select()
       .single();
 
     if (!error && data) {
       setSessionNotes(prev => [data, ...prev]);
+      setActiveSessionNum(data.session_number);
       setLiveNote('');
+    }
+    setCreatingSess(false);
+  };
+
+  // ─── Save notes to the active session ──────────────────────
+  const saveNote = async () => {
+    if (!liveNote.trim() || !supabase) return;
+    setSavingNote(true);
+
+    const activeNote = sessionNotes.find(n => n.session_number === activeSessionNum);
+
+    if (activeNote) {
+      // Append to existing session note
+      const updated = activeNote.raw_notes
+        ? `${activeNote.raw_notes}\n\n${liveNote.trim()}`
+        : liveNote.trim();
+
+      const { data, error } = await supabase
+        .from('session_notes')
+        .update({ raw_notes: updated })
+        .eq('id', activeNote.id)
+        .select()
+        .single();
+
+      if (!error && data) {
+        setSessionNotes(prev => prev.map(n => n.id === data.id ? data : n));
+        setLiveNote('');
+      }
+    } else {
+      // No session exists yet — create one
+      const nextNumber = sessionNotes.length > 0
+        ? Math.max(...sessionNotes.map(n => n.session_number)) + 1
+        : 1;
+
+      const { data, error } = await supabase
+        .from('session_notes')
+        .insert({
+          campaign_id: campaignId,
+          session_number: nextNumber,
+          title: `Session ${nextNumber}`,
+          raw_notes: liveNote.trim(),
+        })
+        .select()
+        .single();
+
+      if (!error && data) {
+        setSessionNotes(prev => [data, ...prev]);
+        setActiveSessionNum(data.session_number);
+        setLiveNote('');
+      }
     }
     setSavingNote(false);
   };
@@ -826,55 +874,125 @@ export default function SessionView() {
   // ═══════════════════════════════════════════════════════════════
   // LEFT PANEL — NPCs & Session Journal
   // ═══════════════════════════════════════════════════════════════
+  // Derived session helpers
+  const latestSessionNum = sessionNotes.length > 0 ? Math.max(...sessionNotes.map(n => n.session_number)) : 0;
+  const isLatestSession = activeSessionNum === latestSessionNum;
+  const activeNote = sessionNotes.find(n => n.session_number === activeSessionNum);
+
+  // Parse ai_summary for active note
+  const activeSummary = (() => {
+    if (!activeNote?.ai_summary) return null;
+    try {
+      return typeof activeNote.ai_summary === 'string' ? JSON.parse(activeNote.ai_summary) : activeNote.ai_summary;
+    } catch { return null; }
+  })();
+
+  // Summary rendering helper
+  const renderSummary = (summary) => {
+    if (!summary) return null;
+    return (
+      <div className="mt-2 p-3 bg-domain-panel/40 border border-domain-panel-border/20 rounded-lg space-y-2">
+        {summary.key_events?.length > 0 && (
+          <div>
+            <p className="text-[10px] font-cinzel text-domain-text mb-1">Key Events</p>
+            <ul className="space-y-0.5">
+              {summary.key_events.map((e, i) => (
+                <li key={i} className="text-xs font-crimson text-domain-text-dim flex items-start gap-1.5">
+                  <span className="text-domain-amber/60 shrink-0">-</span> {e}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {summary.npcs_encountered?.length > 0 && (
+          <div>
+            <p className="text-[10px] font-cinzel text-domain-text mb-1">NPCs Encountered</p>
+            {summary.npcs_encountered.map((n, i) => (
+              <p key={i} className="text-xs font-crimson text-domain-text-dim">
+                <span className="text-domain-text">{n.name}</span> — {n.details}
+              </p>
+            ))}
+          </div>
+        )}
+        {summary.unresolved_threads?.length > 0 && (
+          <div>
+            <p className="text-[10px] font-cinzel text-domain-text mb-1">Unresolved Threads</p>
+            <ul className="space-y-0.5">
+              {summary.unresolved_threads.map((t, i) => (
+                <li key={i} className="text-xs font-crimson text-domain-text-dim flex items-start gap-1.5">
+                  <span className="text-domain-amber/60 shrink-0">?</span> {t}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {summary.narrative_summary && (
+          <div>
+            <p className="text-[10px] font-cinzel text-domain-text mb-1">Summary</p>
+            <p className="text-xs font-crimson text-domain-text-dim italic">{summary.narrative_summary}</p>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const LeftPanel = (
     <div className="flex flex-col gap-5 h-full">
-      {/* Live Session Notes */}
+      {/* Session Journal */}
       <div>
         <SectionHeader icon={BookOpen} title="Session Journal" />
-        <textarea
-          value={liveNote}
-          onChange={e => setLiveNote(e.target.value)}
-          placeholder="Live session notes... jot down what happens as you play."
-          rows={5}
-          className="w-full px-3 py-2 bg-[rgba(15,12,8,0.50)] border border-domain-panel-border/40 rounded-lg text-domain-text placeholder-domain-text-dim/40 focus:border-eg4h-gold-dark focus:outline-none font-crimson text-sm resize-none"
-        />
-        <button
-          onClick={saveNote}
-          disabled={!liveNote.trim() || savingNote}
-          className="mt-2 px-4 py-1.5 text-xs font-cinzel font-semibold text-eg4h-black bg-gradient-to-r from-eg4h-gold to-eg4h-gold-light rounded disabled:opacity-40 disabled:cursor-not-allowed hover:shadow-[0_2px_8px_rgba(255,215,0,0.3)] transition-all cursor-pointer"
-        >
-          {savingNote ? 'Saving...' : 'Save Note'}
-        </button>
 
-        {sessionNotes.length > 0 && (
-          <div className="mt-3 max-h-60 overflow-y-auto space-y-2">
-            {sessionNotes.map(note => (
-              <Card key={note.id} className="!p-2">
-                <div className="flex items-center justify-between">
-                  <p className="text-xs font-cinzel text-domain-text">Session {note.session_number}</p>
-                  <div className="flex items-center gap-2">
-                    {note.created_at && (
-                      <span className="text-[10px] font-ui text-domain-text-dim/50 flex items-center gap-1">
-                        <Clock className="w-2.5 h-2.5" />
-                        {new Date(note.created_at).toLocaleDateString()}
-                      </span>
-                    )}
-                    <button onClick={() => startEditNote(note)} className="text-domain-text-dim/40 hover:text-domain-amber cursor-pointer">
-                      <Pencil className="w-3 h-3" />
-                    </button>
-                  </div>
-                </div>
-                {editingNoteId === note.id ? (
-                  <div className="mt-1">
+        {/* Session selector */}
+        <div className="flex items-center gap-1 mb-3 flex-wrap">
+          {[...sessionNotes].sort((a, b) => a.session_number - b.session_number).map(note => (
+            <button
+              key={note.id}
+              onClick={() => { setActiveSessionNum(note.session_number); setEditingNoteId(null); setSessionSummary(null); }}
+              className={`px-2.5 py-1 text-xs font-cinzel rounded cursor-pointer transition-colors ${
+                activeSessionNum === note.session_number
+                  ? 'bg-eg4h-gold/20 text-eg4h-gold border border-eg4h-gold-dark/40'
+                  : 'text-domain-text-dim border border-domain-panel-border/30 hover:border-eg4h-gold-dark/40 hover:text-domain-text'
+              }`}
+            >
+              {note.session_number}
+            </button>
+          ))}
+          <button
+            onClick={startNewSession}
+            disabled={creatingSess}
+            className="px-2.5 py-1 text-xs font-ui text-domain-amber border border-domain-panel-border/30 rounded hover:border-eg4h-gold-dark/40 cursor-pointer disabled:opacity-40 flex items-center gap-1"
+          >
+            <Plus className="w-3 h-3" /> New
+          </button>
+        </div>
+
+        {/* Active session content */}
+        {activeNote ? (
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs font-cinzel text-domain-text">Session {activeNote.session_number}</p>
+              {activeNote.created_at && (
+                <span className="text-[10px] font-ui text-domain-text-dim/50 flex items-center gap-1">
+                  <Clock className="w-2.5 h-2.5" />
+                  {new Date(activeNote.created_at).toLocaleDateString()}
+                </span>
+              )}
+            </div>
+
+            {/* Saved notes display */}
+            {activeNote.raw_notes && (
+              <div className="mb-2">
+                {editingNoteId === activeNote.id ? (
+                  <div>
                     <textarea
                       value={editNoteText}
                       onChange={e => setEditNoteText(e.target.value)}
-                      rows={4}
+                      rows={6}
                       className="w-full px-2 py-1.5 bg-[rgba(15,12,8,0.50)] border border-domain-panel-border/40 rounded text-xs text-domain-text focus:border-eg4h-gold-dark focus:outline-none font-crimson resize-none"
                       autoFocus
                     />
                     <div className="flex gap-2 mt-1">
-                      <button onClick={() => saveEditNote(note.id)} disabled={savingEditNote} className="px-3 py-1 text-[10px] font-cinzel font-semibold text-eg4h-black bg-gradient-to-r from-eg4h-gold to-eg4h-gold-light rounded disabled:opacity-40 cursor-pointer">
+                      <button onClick={() => saveEditNote(activeNote.id)} disabled={savingEditNote} className="px-3 py-1 text-[10px] font-cinzel font-semibold text-eg4h-black bg-gradient-to-r from-eg4h-gold to-eg4h-gold-light rounded disabled:opacity-40 cursor-pointer">
                         {savingEditNote ? 'Saving...' : 'Save'}
                       </button>
                       <button onClick={() => { setEditingNoteId(null); setEditNoteText(''); }} className="px-3 py-1 text-[10px] font-ui text-domain-text-dim hover:text-domain-text cursor-pointer">
@@ -883,108 +1001,101 @@ export default function SessionView() {
                     </div>
                   </div>
                 ) : (
-                  <p className="text-xs font-crimson text-domain-text-dim mt-0.5 line-clamp-3">{note.raw_notes}</p>
-                )}
-              </Card>
-            ))}
-          </div>
-        )}
-
-        {/* AI Session Summary */}
-        {sessionNotes.length > 0 && (
-          <div className="mt-3">
-            <button
-              onClick={async () => {
-                if (summaryLoading) return;
-                if (!requireDM('AI session summaries are a Dungeon Master tier feature. Upgrade for AI-powered session recaps.')) return;
-                setSummaryLoading(true);
-                setSessionSummary(null);
-                try {
-                  const allNotes = sessionNotes.map(n => `Session ${n.session_number}: ${n.raw_notes}`).join('\n\n');
-                  const res = await fetch('/.netlify/functions/ai-assist', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                      type: 'summary',
-                      prompt: 'Summarize these session notes.',
-                      context: {
-                        campaignName: campaign?.name,
-                        campaignDescription: campaign?.description,
-                        sessionNotes: allNotes,
-                      },
-                    }),
-                  });
-                  if (res.ok) {
-                    const { result, raw } = await res.json();
-                    const summary = result || { narrative_summary: raw || 'Could not generate summary.' };
-                    setSessionSummary(summary);
-
-                    // Persist to the most recent session note
-                    const latestNote = sessionNotes[0];
-                    if (latestNote && supabase) {
-                      await supabase
-                        .from('session_notes')
-                        .update({ ai_summary: JSON.stringify(summary) })
-                        .eq('id', latestNote.id);
-                    }
-                  }
-                } catch (err) {
-                  console.error('Summary generation error:', err);
-                  setSessionSummary({ narrative_summary: 'AI summary unavailable — try again later.' });
-                }
-                setSummaryLoading(false);
-              }}
-              disabled={summaryLoading}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-ui text-domain-amber border border-domain-panel-border/40 rounded hover:border-eg4h-gold-dark/60 transition-colors cursor-pointer disabled:opacity-40"
-            >
-              {summaryLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
-              {summaryLoading ? 'Generating...' : 'Generate Summary'}
-            </button>
-
-            {sessionSummary && (
-              <div className="mt-2 p-3 bg-domain-panel/40 border border-domain-panel-border/20 rounded-lg space-y-2">
-                {sessionSummary.key_events?.length > 0 && (
-                  <div>
-                    <p className="text-[10px] font-cinzel text-domain-text mb-1">Key Events</p>
-                    <ul className="space-y-0.5">
-                      {sessionSummary.key_events.map((e, i) => (
-                        <li key={i} className="text-xs font-crimson text-domain-text-dim flex items-start gap-1.5">
-                          <span className="text-domain-amber/60 shrink-0">-</span> {e}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-                {sessionSummary.npcs_encountered?.length > 0 && (
-                  <div>
-                    <p className="text-[10px] font-cinzel text-domain-text mb-1">NPCs Encountered</p>
-                    {sessionSummary.npcs_encountered.map((n, i) => (
-                      <p key={i} className="text-xs font-crimson text-domain-text-dim">
-                        <span className="text-domain-text">{n.name}</span> — {n.details}
-                      </p>
-                    ))}
-                  </div>
-                )}
-                {sessionSummary.unresolved_threads?.length > 0 && (
-                  <div>
-                    <p className="text-[10px] font-cinzel text-domain-text mb-1">Unresolved Threads</p>
-                    <ul className="space-y-0.5">
-                      {sessionSummary.unresolved_threads.map((t, i) => (
-                        <li key={i} className="text-xs font-crimson text-domain-text-dim flex items-start gap-1.5">
-                          <span className="text-domain-amber/60 shrink-0">?</span> {t}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-                {sessionSummary.narrative_summary && (
-                  <div>
-                    <p className="text-[10px] font-cinzel text-domain-text mb-1">Summary</p>
-                    <p className="text-xs font-crimson text-domain-text-dim italic">{sessionSummary.narrative_summary}</p>
-                  </div>
+                  <Card className="!p-2">
+                    <div className="flex items-start justify-between">
+                      <p className="text-xs font-crimson text-domain-text-dim whitespace-pre-wrap flex-1">{activeNote.raw_notes}</p>
+                      <button onClick={() => startEditNote(activeNote)} className="text-domain-text-dim/40 hover:text-domain-amber cursor-pointer shrink-0 ml-2">
+                        <Pencil className="w-3 h-3" />
+                      </button>
+                    </div>
+                  </Card>
                 )}
               </div>
             )}
+
+            {/* Live note-taking for current session */}
+            {isLatestSession && editingNoteId !== activeNote.id && (
+              <div>
+                <textarea
+                  value={liveNote}
+                  onChange={e => setLiveNote(e.target.value)}
+                  placeholder={activeNote.raw_notes ? 'Add more notes to this session...' : 'Live session notes... jot down what happens as you play.'}
+                  rows={4}
+                  className="w-full px-3 py-2 bg-[rgba(15,12,8,0.50)] border border-domain-panel-border/40 rounded-lg text-domain-text placeholder-domain-text-dim/40 focus:border-eg4h-gold-dark focus:outline-none font-crimson text-sm resize-none"
+                />
+                <button
+                  onClick={saveNote}
+                  disabled={!liveNote.trim() || savingNote}
+                  className="mt-2 px-4 py-1.5 text-xs font-cinzel font-semibold text-eg4h-black bg-gradient-to-r from-eg4h-gold to-eg4h-gold-light rounded disabled:opacity-40 disabled:cursor-not-allowed hover:shadow-[0_2px_8px_rgba(255,215,0,0.3)] transition-all cursor-pointer"
+                >
+                  {savingNote ? 'Saving...' : 'Save Note'}
+                </button>
+              </div>
+            )}
+
+            {/* AI Summary for this session */}
+            {activeNote.raw_notes && (
+              <div className="mt-3">
+                <button
+                  onClick={async () => {
+                    if (summaryLoading) return;
+                    if (!requireDM('AI session summaries are a Dungeon Master tier feature. Upgrade for AI-powered session recaps.')) return;
+                    setSummaryLoading(true);
+                    setSessionSummary(null);
+                    try {
+                      const res = await fetch('/.netlify/functions/ai-assist', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          type: 'summary',
+                          prompt: `Summarize Session ${activeNote.session_number}.`,
+                          context: {
+                            campaignName: campaign?.name,
+                            campaignDescription: campaign?.description,
+                            sessionNotes: `Session ${activeNote.session_number}: ${activeNote.raw_notes}`,
+                          },
+                        }),
+                      });
+                      if (res.ok) {
+                        const { result, raw } = await res.json();
+                        const summary = result || { narrative_summary: raw || 'Could not generate summary.' };
+                        setSessionSummary(summary);
+
+                        // Persist to this session note
+                        await supabase
+                          .from('session_notes')
+                          .update({ ai_summary: JSON.stringify(summary) })
+                          .eq('id', activeNote.id);
+
+                        // Update local state so it persists on tab switch
+                        setSessionNotes(prev => prev.map(n => n.id === activeNote.id ? { ...n, ai_summary: JSON.stringify(summary) } : n));
+                      }
+                    } catch (err) {
+                      console.error('Summary generation error:', err);
+                      setSessionSummary({ narrative_summary: 'AI summary unavailable — try again later.' });
+                    }
+                    setSummaryLoading(false);
+                  }}
+                  disabled={summaryLoading}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-ui text-domain-amber border border-domain-panel-border/40 rounded hover:border-eg4h-gold-dark/60 transition-colors cursor-pointer disabled:opacity-40"
+                >
+                  {summaryLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                  {summaryLoading ? 'Generating...' : activeSummary ? 'Regenerate Summary' : 'Generate Summary'}
+                </button>
+                {renderSummary(sessionSummary || activeSummary)}
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="text-center py-4">
+            <p className="text-xs font-crimson text-domain-text-dim/50 italic mb-3">No sessions yet.</p>
+            <button
+              onClick={startNewSession}
+              disabled={creatingSess}
+              className="px-4 py-2 text-xs font-cinzel font-semibold text-eg4h-black bg-gradient-to-r from-eg4h-gold to-eg4h-gold-light rounded disabled:opacity-40 hover:shadow-[0_2px_8px_rgba(255,215,0,0.3)] transition-all cursor-pointer"
+            >
+              Start Session 1
+            </button>
           </div>
         )}
       </div>
