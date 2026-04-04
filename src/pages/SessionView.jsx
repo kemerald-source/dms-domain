@@ -5,7 +5,7 @@ import {
   ArrowLeft, Loader2, Plus, Trash2, Swords, BookOpen, Users,
   Scroll, Sparkles, Globe, ChevronUp, ChevronDown, Shield,
   Heart, Eye, X, GripVertical, Pencil, Save, Lock, EyeOff, Dices,
-  ChevronRight, BookMarked, MapPin, Clock,
+  ChevronRight, BookMarked, MapPin, Clock, Mail, MailOpen,
 } from 'lucide-react';
 import { useAuth } from '@/api/AuthContext';
 import { supabase } from '@/lib/supabase';
@@ -83,6 +83,7 @@ function parseCharStats(cd) {
   const name = cd.name || cd.characterName || 'Unknown';
   const charClass = cd.class || cd.className || '';
   const level = cd.level || '';
+  const overrides = cd.combatOverrides || {};
 
   // Ability scores — CE uses abilityScores (with racial bonuses applied)
   const scores = cd.abilityScores || cd.abilities || cd.baseScores || {};
@@ -90,32 +91,35 @@ function parseCharStats(cd) {
   const conMod = scores.con ? Math.floor((scores.con - 10) / 2) : 0;
   const wisMod = scores.wis ? Math.floor((scores.wis - 10) / 2) : 0;
 
-  // HP — CE stores currentHp (nullable) and derives max from class hit die + con
+  // HP — check combatOverrides.hp first, then CE's currentHp, then calculate
   const hitDice = { barbarian: 12, fighter: 10, paladin: 10, ranger: 10, bard: 8, cleric: 8, druid: 8, monk: 8, rogue: 8, warlock: 8, sorcerer: 6, wizard: 6 };
-  const die = hitDice[charClass.toLowerCase()] || 8;
-  const baseMaxHp = die + conMod; // level 1: max die + CON mod
+  const die = hitDice[(charClass || '').toLowerCase()] || 8;
   const lvl = parseInt(level) || 1;
-  // Levels beyond 1: average roll + CON mod per level
-  const maxHp = cd.maxHp ?? (baseMaxHp + (lvl > 1 ? (lvl - 1) * (Math.floor(die / 2) + 1 + conMod) : 0));
+  const baseMaxHp = die + conMod;
+  const calcMaxHp = baseMaxHp + (lvl > 1 ? (lvl - 1) * (Math.floor(die / 2) + 1 + conMod) : 0);
+  const maxHp = overrides.hp ?? cd.maxHp ?? calcMaxHp;
   const hp = cd.currentHp ?? maxHp;
 
-  // AC — check for explicit value, then estimate from equipment/class
-  let ac = cd.ac ?? cd.armorClass ?? null;
+  // AC — check combatOverrides.ac, then cd.ac, then estimate from class/equipment
+  let ac = overrides.ac ?? cd.ac ?? cd.armorClass ?? null;
   if (ac == null) {
-    // Base 10 + DEX for unarmored; if wearing heavy armor (chain mail for fighters), DEX doesn't apply
-    // Simple heuristic: check equipped items for known armors
-    ac = 10 + dexMod; // default unarmored
-    if (cd.equippedItems && cd.equipmentSelections !== undefined) {
-      // Fighter with chain mail = AC 16 (no DEX)
-      const cls = charClass.toLowerCase();
-      if (['fighter', 'paladin'].includes(cls)) ac = Math.max(ac, 16);
-      else if (['cleric', 'ranger'].includes(cls)) ac = Math.max(ac, 14 + Math.min(dexMod, 2));
-      else if (cls === 'barbarian') ac = 10 + dexMod + conMod;
-      else if (cls === 'monk') ac = 10 + dexMod + wisMod;
-    }
+    const cls = (charClass || '').toLowerCase();
+    ac = 10 + dexMod;
+    if (cls === 'barbarian') ac = 10 + dexMod + conMod;
+    else if (cls === 'monk') ac = 10 + dexMod + wisMod;
+    else if (['fighter', 'paladin'].includes(cls)) ac = Math.max(ac, 16);
+    else if (['cleric', 'ranger'].includes(cls)) ac = Math.max(ac, 14 + Math.min(dexMod, 2));
   }
 
-  const pp = scores.wis ? 10 + wisMod : null;
+  // Passive perception — 10 + WIS mod (+ proficiency if proficient in Perception)
+  let pp = scores.wis ? 10 + wisMod : null;
+  if (pp != null && cd.skillProfs) {
+    const percProf = cd.skillProfs['Perception'] || 0;
+    if (percProf > 0) {
+      const profBonus = Math.floor((lvl - 1) / 4) + 2;
+      pp += profBonus * percProf; // 1 = proficiency, 2 = expertise
+    }
+  }
 
   return { name, charClass, level, ac, hp, maxHp, pp, dexMod, scores };
 }
@@ -179,6 +183,12 @@ export default function SessionView() {
   const [openNoteId, setOpenNoteId] = useState(null);
   const [noteText, setNoteText] = useState('');
   const [savingDmNote, setSavingDmNote] = useState(false);
+  // DM messaging state
+  const [openMsgId, setOpenMsgId] = useState(null);
+  const [msgText, setMsgText] = useState('');
+  const [sendingMsg, setSendingMsg] = useState(false);
+  const [dmMessages, setDmMessages] = useState({});
+
   const [combatants, setCombatants] = useState([]);
   const [combatRound, setCombatRound] = useState(0);
   const [newCombatant, setNewCombatant] = useState({ name: '', init: '', hp: '' });
@@ -263,18 +273,25 @@ export default function SessionView() {
               character: charMap[m.character_id] || null,
             })));
 
-            // Fetch DM secret notes for these characters
-            const { data: notes } = await supabase
-              .from('dm_character_notes')
-              .select('*')
-              .eq('campaign_id', campaignId)
-              .eq('dm_email', user.email)
-              .in('character_id', charIds);
+            // Fetch DM secret notes and messages for these characters
+            const [notesRes, msgsRes] = await Promise.all([
+              supabase.from('dm_character_notes').select('*').eq('campaign_id', campaignId).eq('dm_email', user.email).in('character_id', charIds),
+              supabase.from('dm_messages').select('*').eq('campaign_id', campaignId).eq('from_email', user.email).order('created_at', { ascending: false }),
+            ]);
 
-            if (notes?.length) {
+            if (notesRes.data?.length) {
               const noteMap = {};
-              notes.forEach(n => { noteMap[n.character_id] = n; });
+              notesRes.data.forEach(n => { noteMap[n.character_id] = n; });
               setDmNotes(noteMap);
+            }
+
+            if (msgsRes.data?.length) {
+              const msgMap = {};
+              msgsRes.data.forEach(msg => {
+                if (!msgMap[msg.to_character_id]) msgMap[msg.to_character_id] = [];
+                msgMap[msg.to_character_id].push(msg);
+              });
+              setDmMessages(msgMap);
             }
           }
         }
@@ -530,6 +547,62 @@ export default function SessionView() {
       });
       setOpenNoteId(null);
       setNoteText('');
+    }
+  };
+
+  // ─── DM secret messaging ────────────────────────────────────
+  const toggleMsg = (characterId) => {
+    if (openMsgId === characterId) {
+      setOpenMsgId(null);
+      setMsgText('');
+    } else {
+      setOpenMsgId(characterId);
+      setMsgText('');
+    }
+  };
+
+  const sendMessage = async (characterId, toEmail) => {
+    if (!msgText.trim() || !supabase || !user?.email) return;
+    setSendingMsg(true);
+
+    const { data, error } = await supabase
+      .from('dm_messages')
+      .insert({
+        campaign_id: campaignId,
+        from_email: user.email,
+        to_email: toEmail || null,
+        to_character_id: characterId,
+        message: msgText.trim(),
+        is_read: false,
+      })
+      .select()
+      .single();
+
+    if (error) console.error('Message send failed:', error.message);
+
+    if (!error && data) {
+      setDmMessages(prev => ({
+        ...prev,
+        [characterId]: [data, ...(prev[characterId] || [])],
+      }));
+      setMsgText('');
+    }
+    setSendingMsg(false);
+  };
+
+  const toggleMsgRead = async (msg) => {
+    if (!supabase) return;
+    const { data, error } = await supabase
+      .from('dm_messages')
+      .update({ is_read: !msg.is_read })
+      .eq('id', msg.id)
+      .select()
+      .single();
+    if (!error && data) {
+      setDmMessages(prev => ({
+        ...prev,
+        [msg.to_character_id]: (prev[msg.to_character_id] || []).map(m => m.id === data.id ? data : m),
+      }));
     }
   };
 
@@ -1132,6 +1205,13 @@ export default function SessionView() {
                         </span>
                       )}
                       <button
+                        onClick={() => toggleMsg(m.character_id)}
+                        className={`p-0.5 rounded transition-colors cursor-pointer ${openMsgId === m.character_id ? 'text-domain-amber' : 'text-domain-text-dim/40 hover:text-domain-amber'}`}
+                        title="Send Secret Note"
+                      >
+                        <Mail className="w-3.5 h-3.5" />
+                      </button>
+                      <button
                         onClick={() => toggleDmNote(m.character_id)}
                         className={`p-0.5 rounded transition-colors cursor-pointer ${isOpen ? 'text-domain-amber' : 'text-domain-text-dim/40 hover:text-domain-amber'}`}
                         title="DM Notes"
@@ -1183,6 +1263,53 @@ export default function SessionView() {
                               </button>
                             )}
                           </div>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+
+                  {/* DM Secret Messaging */}
+                  <AnimatePresence>
+                    {openMsgId === m.character_id && (
+                      <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
+                        <div className="mt-2 pt-2 border-t border-domain-panel-border/30">
+                          <div className="flex items-center gap-1.5 mb-1.5">
+                            <Mail className="w-3 h-3 text-blue-400/80" />
+                            <span className="text-[10px] font-ui text-blue-400/80">Secret note to {stats.name}</span>
+                          </div>
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              value={msgText}
+                              onChange={e => setMsgText(e.target.value)}
+                              placeholder={`Send a secret message to ${stats.name}...`}
+                              className="flex-1 px-2 py-1.5 bg-[rgba(15,12,8,0.60)] border border-blue-400/20 rounded text-xs text-domain-text placeholder-domain-text-dim/40 focus:border-blue-400/50 focus:outline-none font-crimson"
+                              onKeyDown={e => { if (e.key === 'Enter' && msgText.trim()) sendMessage(m.character_id, m.email); }}
+                            />
+                            <button
+                              onClick={() => sendMessage(m.character_id, m.email)}
+                              disabled={!msgText.trim() || sendingMsg}
+                              className="px-3 py-1 text-[10px] font-cinzel font-semibold text-eg4h-black bg-gradient-to-r from-eg4h-gold to-eg4h-gold-light rounded disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                            >
+                              Send
+                            </button>
+                          </div>
+                          {(dmMessages[m.character_id] || []).length > 0 && (
+                            <div className="mt-2 space-y-1 max-h-28 overflow-y-auto">
+                              {(dmMessages[m.character_id] || []).slice(0, 10).map(msg => (
+                                <div key={msg.id} className="flex items-start gap-2 px-2 py-1 bg-domain-panel/40 rounded text-[11px]">
+                                  <button onClick={() => toggleMsgRead(msg)} className="shrink-0 mt-0.5 cursor-pointer" title={msg.is_read ? 'Mark unread' : 'Mark read'}>
+                                    {msg.is_read
+                                      ? <MailOpen className="w-3 h-3 text-domain-text-dim/30" />
+                                      : <Mail className="w-3 h-3 text-blue-400/70" />
+                                    }
+                                  </button>
+                                  <p className={`font-crimson flex-1 ${msg.is_read ? 'text-domain-text-dim/50' : 'text-domain-text-dim'}`}>{msg.message}</p>
+                                  <span className="text-[9px] font-ui text-domain-text-dim/30 shrink-0">{new Date(msg.created_at).toLocaleDateString()}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       </motion.div>
                     )}
