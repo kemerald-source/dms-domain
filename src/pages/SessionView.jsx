@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   ArrowLeft, Loader2, Plus, Trash2, Swords, BookOpen, Users,
   Scroll, Sparkles, Globe, ChevronUp, ChevronDown, Shield,
-  Heart, Eye, X, GripVertical,
+  Heart, Eye, X, GripVertical, Pencil, Save,
 } from 'lucide-react';
 import { useAuth } from '@/api/AuthContext';
 import { supabase } from '@/lib/supabase';
@@ -122,6 +122,18 @@ export default function SessionView() {
   const [threads, setThreads] = useState([]);
   const [lore, setLore] = useState([]);
   const [improvInput, setImprovInput] = useState('');
+
+  // Story thread form state
+  const [showThreadForm, setShowThreadForm] = useState(false);
+  const [editingThread, setEditingThread] = useState(null);
+  const [threadForm, setThreadForm] = useState({ title: '', description: '', thread_type: 'hook', urgency: 'medium' });
+  const [savingThread, setSavingThread] = useState(false);
+
+  // World lore form state
+  const [showLoreForm, setShowLoreForm] = useState(false);
+  const [editingLore, setEditingLore] = useState(null);
+  const [loreForm, setLoreForm] = useState({ name: '', type: 'location', description: '', notes: '' });
+  const [savingLore, setSavingLore] = useState(false);
 
   // Right panel state
   const [partyMembers, setPartyMembers] = useState([]);
@@ -279,6 +291,131 @@ export default function SessionView() {
     setCombatants(prev => [...prev, ...partyCombatants].sort((a, b) => b.init - a.init));
   };
 
+  // ─── Story thread CRUD ──────────────────────────────────────
+  const openNewThread = () => {
+    setEditingThread(null);
+    setThreadForm({ title: '', description: '', thread_type: 'hook', urgency: 'medium' });
+    setShowThreadForm(true);
+  };
+
+  const openEditThread = (thread) => {
+    setEditingThread(thread);
+    setThreadForm({
+      title: thread.title,
+      description: thread.description || '',
+      thread_type: thread.thread_type || 'hook',
+      urgency: thread.urgency || 'medium',
+    });
+    setShowThreadForm(true);
+  };
+
+  const saveThread = async () => {
+    if (!threadForm.title.trim() || !supabase) return;
+    setSavingThread(true);
+
+    const payload = {
+      campaign_id: campaignId,
+      title: threadForm.title.trim(),
+      description: threadForm.description.trim() || null,
+      thread_type: threadForm.thread_type,
+      urgency: threadForm.urgency,
+      status: 'open',
+    };
+
+    if (editingThread) {
+      const { data, error } = await supabase
+        .from('story_threads')
+        .update({ title: payload.title, description: payload.description, thread_type: payload.thread_type, urgency: payload.urgency })
+        .eq('id', editingThread.id)
+        .select()
+        .single();
+      if (!error && data) {
+        setThreads(prev => prev.map(t => t.id === data.id ? data : t));
+      }
+    } else {
+      const { data, error } = await supabase
+        .from('story_threads')
+        .insert(payload)
+        .select()
+        .single();
+      if (!error && data) {
+        setThreads(prev => [data, ...prev]);
+      }
+    }
+
+    setShowThreadForm(false);
+    setEditingThread(null);
+    setSavingThread(false);
+  };
+
+  const deleteThread = async (id) => {
+    if (!supabase) return;
+    const { error } = await supabase.from('story_threads').delete().eq('id', id);
+    if (!error) setThreads(prev => prev.filter(t => t.id !== id));
+  };
+
+  // ─── World lore CRUD ──────────────────────────────────────────
+  const openNewLore = () => {
+    setEditingLore(null);
+    setLoreForm({ name: '', type: 'location', description: '', notes: '' });
+    setShowLoreForm(true);
+  };
+
+  const openEditLore = (entry) => {
+    setEditingLore(entry);
+    setLoreForm({
+      name: entry.name,
+      type: entry.type || 'location',
+      description: entry.description || '',
+      notes: entry.notes || '',
+    });
+    setShowLoreForm(true);
+  };
+
+  const saveLore = async () => {
+    if (!loreForm.name.trim() || !supabase) return;
+    setSavingLore(true);
+
+    const payload = {
+      campaign_id: campaignId,
+      name: loreForm.name.trim(),
+      type: loreForm.type,
+      description: loreForm.description.trim() || null,
+      notes: loreForm.notes.trim() || null,
+    };
+
+    if (editingLore) {
+      const { data, error } = await supabase
+        .from('world_lore')
+        .update({ name: payload.name, type: payload.type, description: payload.description, notes: payload.notes })
+        .eq('id', editingLore.id)
+        .select()
+        .single();
+      if (!error && data) {
+        setLore(prev => prev.map(l => l.id === data.id ? data : l));
+      }
+    } else {
+      const { data, error } = await supabase
+        .from('world_lore')
+        .insert(payload)
+        .select()
+        .single();
+      if (!error && data) {
+        setLore(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)));
+      }
+    }
+
+    setShowLoreForm(false);
+    setEditingLore(null);
+    setSavingLore(false);
+  };
+
+  const deleteLore = async (id) => {
+    if (!supabase) return;
+    const { error } = await supabase.from('world_lore').delete().eq('id', id);
+    if (!error) setLore(prev => prev.filter(l => l.id !== id));
+  };
+
   // ─── Loading / auth states ──────────────────────────────────
   if (authLoading || loading) {
     return (
@@ -357,28 +494,94 @@ export default function SessionView() {
   // ═══════════════════════════════════════════════════════════════
   // CENTER PANEL — Plot & Story Threads
   // ═══════════════════════════════════════════════════════════════
+
+  const inputClass = "w-full px-3 py-2 bg-[rgba(15,12,8,0.50)] border border-domain-panel-border/40 rounded-lg text-domain-text placeholder-domain-text-dim/40 focus:border-eg4h-gold-dark focus:outline-none font-crimson text-sm";
+  const selectClass = "w-full px-3 py-2 bg-[rgba(15,12,8,0.50)] border border-domain-panel-border/40 rounded-lg text-domain-text focus:border-eg4h-gold-dark focus:outline-none font-crimson text-sm";
+  const goldBtnClass = "px-4 py-1.5 text-xs font-cinzel font-semibold text-eg4h-black bg-gradient-to-r from-eg4h-gold to-eg4h-gold-light rounded disabled:opacity-40 disabled:cursor-not-allowed hover:shadow-[0_2px_8px_rgba(255,215,0,0.3)] transition-all cursor-pointer";
+  const ghostBtnClass = "px-3 py-1.5 text-xs font-ui text-domain-text-dim hover:text-domain-text cursor-pointer";
+
   const CenterPanel = (
     <div className="flex flex-col gap-5 h-full">
       {/* Story Threads */}
       <div>
-        <SectionHeader icon={Scroll} title="Story Threads" />
-        {threads.length === 0 ? (
-          <p className="text-xs font-crimson text-domain-text-dim/50 italic">No story threads yet.</p>
+        <SectionHeader icon={Scroll} title="Story Threads">
+          <button onClick={openNewThread} className="flex items-center gap-1 px-2 py-1 text-xs font-ui text-domain-amber border border-domain-panel-border/50 rounded hover:border-eg4h-gold-dark/60 transition-colors cursor-pointer">
+            <Plus className="w-3 h-3" /> New Thread
+          </button>
+        </SectionHeader>
+
+        {/* Thread form */}
+        <AnimatePresence>
+          {showThreadForm && (
+            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
+              <Card className="mb-3 !bg-domain-panel-raised">
+                <p className="text-xs font-cinzel text-domain-text mb-2">{editingThread ? 'Edit Thread' : 'New Story Thread'}</p>
+                <div className="space-y-2">
+                  <input type="text" placeholder="Title" value={threadForm.title} onChange={e => setThreadForm(p => ({ ...p, title: e.target.value }))} className={inputClass} autoFocus />
+                  <textarea placeholder="Description" value={threadForm.description} onChange={e => setThreadForm(p => ({ ...p, description: e.target.value }))} rows={3} className={`${inputClass} resize-none`} />
+                  <div className="grid grid-cols-2 gap-2">
+                    <select value={threadForm.thread_type} onChange={e => setThreadForm(p => ({ ...p, thread_type: e.target.value }))} className={selectClass}>
+                      <option value="hook">Hook</option>
+                      <option value="consequence">Consequence</option>
+                      <option value="promise">Promise</option>
+                      <option value="quest">Quest</option>
+                      <option value="mystery">Mystery</option>
+                      <option value="custom">Custom</option>
+                    </select>
+                    <select value={threadForm.urgency} onChange={e => setThreadForm(p => ({ ...p, urgency: e.target.value }))} className={selectClass}>
+                      <option value="low">Low</option>
+                      <option value="medium">Medium</option>
+                      <option value="high">High</option>
+                      <option value="critical">Critical</option>
+                    </select>
+                  </div>
+                  <div className="flex gap-2 pt-1">
+                    <button onClick={saveThread} disabled={!threadForm.title.trim() || savingThread} className={goldBtnClass}>
+                      {savingThread ? 'Saving...' : editingThread ? 'Update' : 'Create'}
+                    </button>
+                    <button onClick={() => { setShowThreadForm(false); setEditingThread(null); }} className={ghostBtnClass}>Cancel</button>
+                  </div>
+                </div>
+              </Card>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {threads.length === 0 && !showThreadForm ? (
+          <p className="text-xs font-crimson text-domain-text-dim/50 italic">No story threads yet. Add one to start tracking your plot.</p>
         ) : (
           <div className="space-y-2 max-h-72 overflow-y-auto">
             {threads.map(thread => (
               <Card key={thread.id} className={`border-l-2 ${URGENCY_COLORS[thread.urgency] || ''}`}>
                 <div className="flex items-center justify-between">
                   <span className="font-cinzel text-sm text-domain-text">{thread.title}</span>
-                  <span className={`text-xs font-ui ${STATUS_COLORS[thread.status] || 'text-gray-400'}`}>
-                    {thread.status}
+                  <div className="flex items-center gap-2">
+                    <span className={`text-xs font-ui ${STATUS_COLORS[thread.status] || 'text-gray-400'}`}>
+                      {thread.status}
+                    </span>
+                    <button onClick={() => openEditThread(thread)} className="text-domain-text-dim/40 hover:text-domain-amber cursor-pointer">
+                      <Pencil className="w-3 h-3" />
+                    </button>
+                    <button onClick={() => deleteThread(thread.id)} className="text-domain-text-dim/40 hover:text-red-400 cursor-pointer">
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5 mt-1">
+                  {thread.thread_type && (
+                    <span className="inline-block px-1.5 py-0.5 text-[10px] font-ui bg-domain-warm/30 text-domain-parchment-dark rounded">
+                      {thread.thread_type}
+                    </span>
+                  )}
+                  <span className={`inline-block px-1.5 py-0.5 text-[10px] font-ui rounded ${
+                    thread.urgency === 'critical' ? 'bg-red-900/40 text-red-300' :
+                    thread.urgency === 'high' ? 'bg-orange-900/40 text-orange-300' :
+                    thread.urgency === 'medium' ? 'bg-yellow-900/40 text-yellow-300' :
+                    'bg-gray-800/40 text-gray-400'
+                  }`}>
+                    {thread.urgency}
                   </span>
                 </div>
-                {thread.thread_type && (
-                  <span className="inline-block mt-1 px-1.5 py-0.5 text-[10px] font-ui bg-domain-warm/30 text-domain-parchment-dark rounded">
-                    {thread.thread_type}
-                  </span>
-                )}
                 {thread.description && (
                   <p className="text-xs font-crimson text-domain-text-dim mt-1 line-clamp-3">{thread.description}</p>
                 )}
@@ -397,7 +600,7 @@ export default function SessionView() {
             value={improvInput}
             onChange={e => setImprovInput(e.target.value)}
             placeholder="Ask for an improv suggestion..."
-            className="flex-1 px-3 py-2 bg-[rgba(15,12,8,0.50)] border border-domain-panel-border/40 rounded-lg text-domain-text placeholder-domain-text-dim/40 focus:border-eg4h-gold-dark focus:outline-none font-crimson text-sm"
+            className={inputClass}
           />
           <button className="px-3 py-2 text-xs font-ui text-domain-amber border border-domain-warm/40 rounded-lg hover:border-eg4h-gold-dark/60 transition-colors cursor-pointer opacity-50" disabled>
             <Sparkles className="w-4 h-4" />
@@ -406,21 +609,72 @@ export default function SessionView() {
         <p className="text-[10px] font-ui text-domain-text-dim/40 mt-1">AI assist coming soon</p>
       </div>
 
-      {/* World Lore Quick Reference */}
+      {/* World Lore */}
       <div>
-        <SectionHeader icon={Globe} title="World Lore" />
-        {lore.length === 0 ? (
-          <p className="text-xs font-crimson text-domain-text-dim/50 italic">No lore entries yet.</p>
+        <SectionHeader icon={Globe} title="World Lore">
+          <button onClick={openNewLore} className="flex items-center gap-1 px-2 py-1 text-xs font-ui text-domain-amber border border-domain-panel-border/50 rounded hover:border-eg4h-gold-dark/60 transition-colors cursor-pointer">
+            <Plus className="w-3 h-3" /> New Entry
+          </button>
+        </SectionHeader>
+
+        {/* Lore form */}
+        <AnimatePresence>
+          {showLoreForm && (
+            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
+              <Card className="mb-3 !bg-domain-panel-raised">
+                <p className="text-xs font-cinzel text-domain-text mb-2">{editingLore ? 'Edit Lore Entry' : 'New Lore Entry'}</p>
+                <div className="space-y-2">
+                  <input type="text" placeholder="Name" value={loreForm.name} onChange={e => setLoreForm(p => ({ ...p, name: e.target.value }))} className={inputClass} autoFocus />
+                  <select value={loreForm.type} onChange={e => setLoreForm(p => ({ ...p, type: e.target.value }))} className={selectClass}>
+                    <option value="location">Location</option>
+                    <option value="faction">Faction</option>
+                    <option value="deity">Deity</option>
+                    <option value="history">History</option>
+                    <option value="culture">Culture</option>
+                    <option value="geography">Geography</option>
+                    <option value="law">Law</option>
+                    <option value="legend">Legend</option>
+                    <option value="other">Other</option>
+                  </select>
+                  <textarea placeholder="Description" value={loreForm.description} onChange={e => setLoreForm(p => ({ ...p, description: e.target.value }))} rows={3} className={`${inputClass} resize-none`} />
+                  <textarea placeholder="Notes (optional)" value={loreForm.notes} onChange={e => setLoreForm(p => ({ ...p, notes: e.target.value }))} rows={2} className={`${inputClass} resize-none`} />
+                  <div className="flex gap-2 pt-1">
+                    <button onClick={saveLore} disabled={!loreForm.name.trim() || savingLore} className={goldBtnClass}>
+                      {savingLore ? 'Saving...' : editingLore ? 'Update' : 'Create'}
+                    </button>
+                    <button onClick={() => { setShowLoreForm(false); setEditingLore(null); }} className={ghostBtnClass}>Cancel</button>
+                  </div>
+                </div>
+              </Card>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {lore.length === 0 && !showLoreForm ? (
+          <p className="text-xs font-crimson text-domain-text-dim/50 italic">No lore entries yet. Start building your world.</p>
         ) : (
           <div className="space-y-2 max-h-48 overflow-y-auto">
             {lore.map(entry => (
               <Card key={entry.id} className="!p-2">
-                <div className="flex items-center gap-2">
-                  <span className="px-1.5 py-0.5 text-[10px] font-ui bg-domain-warm/30 text-domain-parchment-dark rounded">{entry.type}</span>
-                  <span className="font-cinzel text-xs text-domain-text">{entry.name}</span>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="px-1.5 py-0.5 text-[10px] font-ui bg-domain-warm/30 text-domain-parchment-dark rounded shrink-0">{entry.type}</span>
+                    <span className="font-cinzel text-xs text-domain-text truncate">{entry.name}</span>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0 ml-2">
+                    <button onClick={() => openEditLore(entry)} className="text-domain-text-dim/40 hover:text-domain-amber cursor-pointer">
+                      <Pencil className="w-3 h-3" />
+                    </button>
+                    <button onClick={() => deleteLore(entry.id)} className="text-domain-text-dim/40 hover:text-red-400 cursor-pointer">
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  </div>
                 </div>
                 {entry.description && (
                   <p className="text-xs font-crimson text-domain-text-dim mt-1 line-clamp-2">{entry.description}</p>
+                )}
+                {entry.notes && (
+                  <p className="text-xs font-crimson text-domain-text-dim/60 mt-0.5 italic line-clamp-1">{entry.notes}</p>
                 )}
               </Card>
             ))}
