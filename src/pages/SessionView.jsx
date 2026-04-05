@@ -5,7 +5,7 @@ import {
   ArrowLeft, Loader2, Plus, Trash2, Swords, BookOpen, Users,
   Scroll, Sparkles, Globe, ChevronUp, ChevronDown, Shield,
   Heart, Eye, X, GripVertical, Pencil, Save, Lock, EyeOff, Dices,
-  ChevronRight, BookMarked, MapPin, Clock, Mail, MailOpen,
+  ChevronRight, BookMarked, MapPin, Clock, Mail, MailOpen, Check, Zap, RotateCcw, Layers,
 } from 'lucide-react';
 import { useAuth } from '@/api/AuthContext';
 import { supabase } from '@/lib/supabase';
@@ -165,6 +165,9 @@ export default function SessionView() {
   const [improvInput, setImprovInput] = useState('');
   const [improvSuggestions, setImprovSuggestions] = useState([]);
   const [improvLoading, setImprovLoading] = useState(false);
+  const [improvError, setImprovError] = useState(null);
+  const [improvCount, setImprovCount] = useState(0);
+  const [improvToast, setImprovToast] = useState(null);
 
   // Session summary state
   const [sessionSummary, setSessionSummary] = useState(null);
@@ -1378,98 +1381,168 @@ export default function SessionView() {
 
       {/* AI Improv Assist */}
       <div className="shrink-0">
-        <SectionHeader icon={Sparkles} title="AI Improv Assist" />
+        <SectionHeader icon={Sparkles} title="AI Improv Assist">
+          {isDM && improvCount > 0 && (
+            <span className="text-[10px] font-ui text-domain-text-dim/40">{10 - improvCount}/10 remaining</span>
+          )}
+        </SectionHeader>
         <div className="flex gap-2">
           <input
             type="text"
             value={improvInput}
             onChange={e => setImprovInput(e.target.value)}
-            placeholder="The party just did something unexpected..."
+            placeholder={[
+              'The rogue just pickpocketed the king...',
+              'They went into the forest I haven\'t mapped...',
+              'The bard is trying to seduce the dragon...',
+              'A player asked about a backstory NPC I forgot...',
+              'The party split up and went opposite directions...',
+            ][Math.floor(Date.now() / 30000) % 5]}
             className={inputClass}
+            disabled={improvLoading}
             onKeyDown={async (e) => {
-              if (e.key === 'Enter' && improvInput.trim() && !improvLoading) {
-                if (!requireDM('AI Improv Assist is a Dungeon Master tier feature. Upgrade for AI-powered suggestions at the table.')) return;
-                setImprovLoading(true);
-                setImprovSuggestions([]);
-                try {
-                  const res = await fetch('/.netlify/functions/ai-assist', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                      type: 'improv',
-                      prompt: improvInput.trim(),
-                      context: {
-                        campaignName: campaign?.name,
-                        campaignDescription: campaign?.description,
-                        npcs: npcs.slice(0, 10).map(n => ({ name: n.name, role: n.role })),
-                        threads: threads.slice(0, 5).map(t => ({ title: t.title })),
-                      },
-                    }),
-                  });
-                  if (res.ok) {
-                    const { result, raw } = await res.json();
-                    if (result?.suggestions) setImprovSuggestions(result.suggestions);
-                    else if (raw) setImprovSuggestions([raw]);
-                  }
-                } catch (err) {
-                  console.error('Improv assist error:', err);
-                  setImprovSuggestions(['AI assist unavailable — try again later.']);
+              if (e.key !== 'Enter' || !improvInput.trim() || improvLoading) return;
+              if (!requireDM('AI Improv Assist is a Dungeon Master tier feature. Upgrade for AI-powered suggestions at the table.')) return;
+              if (improvCount >= 10) { setImprovError('You\'ve used all 10 AI assists for this session. Start a new session to reset.'); return; }
+              setImprovLoading(true);
+              setImprovSuggestions([]);
+              setImprovError(null);
+              try {
+                const res = await fetch('/.netlify/functions/ai-improv', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ campaignId, userInput: improvInput.trim(), userEmail: user?.email }),
+                });
+                const data = await res.json();
+                if (res.ok && data.suggestions) {
+                  setImprovSuggestions(data.suggestions);
+                  setImprovCount(prev => prev + 1);
+                } else {
+                  setImprovError(data.error || 'Something went wrong. Try again.');
                 }
-                setImprovLoading(false);
+              } catch (err) {
+                console.error('Improv assist error:', err);
+                setImprovError("Couldn't reach the AI. Try again in a moment.");
               }
+              setImprovLoading(false);
             }}
           />
           <button
             onClick={async () => {
               if (!improvInput.trim() || improvLoading) return;
               if (!requireDM('AI Improv Assist is a Dungeon Master tier feature. Upgrade for AI-powered suggestions at the table.')) return;
+              if (improvCount >= 10) { setImprovError('You\'ve used all 10 AI assists for this session. Start a new session to reset.'); return; }
               setImprovLoading(true);
               setImprovSuggestions([]);
+              setImprovError(null);
               try {
-                const res = await fetch('/.netlify/functions/ai-assist', {
+                const res = await fetch('/.netlify/functions/ai-improv', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    type: 'improv',
-                    prompt: improvInput.trim(),
-                    context: {
-                      campaignName: campaign?.name,
-                      campaignDescription: campaign?.description,
-                      npcs: npcs.slice(0, 10).map(n => ({ name: n.name, role: n.role })),
-                      threads: threads.slice(0, 5).map(t => ({ title: t.title })),
-                    },
-                  }),
+                  body: JSON.stringify({ campaignId, userInput: improvInput.trim(), userEmail: user?.email }),
                 });
-                if (res.ok) {
-                  const { result, raw } = await res.json();
-                  if (result?.suggestions) setImprovSuggestions(result.suggestions);
-                  else if (raw) setImprovSuggestions([raw]);
+                const data = await res.json();
+                if (res.ok && data.suggestions) {
+                  setImprovSuggestions(data.suggestions);
+                  setImprovCount(prev => prev + 1);
+                } else {
+                  setImprovError(data.error || 'Something went wrong. Try again.');
                 }
               } catch (err) {
                 console.error('Improv assist error:', err);
-                setImprovSuggestions(['AI assist unavailable — try again later.']);
+                setImprovError("Couldn't reach the AI. Try again in a moment.");
               }
               setImprovLoading(false);
             }}
-            disabled={!improvInput.trim() || improvLoading}
+            disabled={!improvInput.trim() || improvLoading || improvCount >= 10}
             className="px-3 py-2 text-xs font-ui text-domain-amber border border-domain-warm/40 rounded-lg hover:border-eg4h-gold-dark/60 transition-colors cursor-pointer disabled:opacity-40"
           >
             {improvLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
           </button>
         </div>
-        <p className="text-[10px] font-ui text-domain-text-dim/40 mt-1">Press Enter or click to get AI suggestions</p>
+        <p className="text-[10px] font-ui text-domain-text-dim/40 mt-1">Describe what happened — get 3 ways to run with it</p>
 
-        {/* Improv suggestions */}
-        {improvSuggestions.length > 0 && (
-          <div className="mt-2 space-y-1.5">
-            {improvSuggestions.map((s, i) => (
-              <div key={i} className="flex items-start gap-2 p-2 bg-domain-panel/40 border border-domain-panel-border/20 rounded-lg">
-                <Sparkles className="w-3 h-3 text-domain-amber/60 shrink-0 mt-0.5" />
-                <p className="text-xs font-crimson text-domain-text-dim">{s}</p>
+        {/* Loading skeleton */}
+        {improvLoading && (
+          <div className="mt-3 space-y-2">
+            {[0, 1, 2].map(i => (
+              <div key={i} className="p-3 bg-domain-panel/40 border border-domain-panel-border/20 rounded-lg animate-pulse">
+                <div className="h-3 bg-domain-panel-border/30 rounded w-24 mb-2" />
+                <div className="h-2.5 bg-domain-panel-border/20 rounded w-full mb-1.5" />
+                <div className="h-2.5 bg-domain-panel-border/20 rounded w-3/4" />
               </div>
             ))}
           </div>
         )}
+
+        {/* Error state */}
+        {improvError && !improvLoading && (
+          <div className="mt-3 p-3 bg-red-900/20 border border-red-800/30 rounded-lg">
+            <p className="text-xs font-crimson text-red-400">{improvError}</p>
+          </div>
+        )}
+
+        {/* Suggestion cards */}
+        {!improvLoading && improvSuggestions.length > 0 && (
+          <div className="mt-3 space-y-2">
+            {improvSuggestions.map((s, i) => {
+              const approachIcon = s.approach === 'escalate' ? Zap : s.approach === 'redirect' ? RotateCcw : Layers;
+              const ApproachIcon = approachIcon;
+              const approachColor = s.approach === 'escalate' ? 'text-red-400' : s.approach === 'redirect' ? 'text-blue-400' : 'text-purple-400';
+              const borderColor = s.approach === 'escalate' ? 'border-red-800/30' : s.approach === 'redirect' ? 'border-blue-800/30' : 'border-purple-800/30';
+              return (
+                <div key={i} className={`p-3 bg-domain-panel/50 border ${borderColor} rounded-lg`}>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <div className="flex items-center gap-1.5">
+                      <ApproachIcon className={`w-3 h-3 ${approachColor}`} />
+                      <span className={`text-xs font-cinzel font-semibold ${approachColor}`}>{s.label || s.approach}</span>
+                    </div>
+                    <button
+                      onClick={async () => {
+                        // Save to session notes
+                        const noteText = `[AI Improv] ${s.text}\n[DM situation: ${improvInput}]`;
+                        const activeNote = sessionNotes.find(n => n.session_number === activeSessionNum);
+                        if (activeNote && supabase) {
+                          const updated = activeNote.raw_notes ? `${activeNote.raw_notes}\n\n${noteText}` : noteText;
+                          const { data, error } = await supabase.from('session_notes').update({ raw_notes: updated }).eq('id', activeNote.id).select().single();
+                          if (!error && data) setSessionNotes(prev => prev.map(n => n.id === data.id ? data : n));
+                        } else if (supabase) {
+                          const nextNum = sessionNotes.length > 0 ? Math.max(...sessionNotes.map(n => n.session_number)) + 1 : 1;
+                          const { data, error } = await supabase.from('session_notes').insert({ campaign_id: campaignId, session_number: nextNum, title: `Session ${nextNum}`, raw_notes: noteText }).select().single();
+                          if (!error && data) { setSessionNotes(prev => [data, ...prev]); setActiveSessionNum(data.session_number); }
+                        }
+                        setImprovToast('Added to session notes');
+                        setTimeout(() => setImprovToast(null), 2500);
+                      }}
+                      className="flex items-center gap-1 px-2 py-0.5 text-[10px] font-ui text-domain-amber border border-domain-warm/30 rounded hover:border-eg4h-gold-dark/50 hover:bg-eg4h-gold/5 transition-colors cursor-pointer"
+                    >
+                      <BookMarked className="w-2.5 h-2.5" /> Use this
+                    </button>
+                  </div>
+                  <p className="text-xs font-crimson text-domain-text-dim leading-relaxed">{s.text}</p>
+                  {s.connection && (
+                    <p className="text-[10px] font-ui text-domain-text-dim/50 mt-1.5 italic">{s.connection}</p>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Toast */}
+        <AnimatePresence>
+          {improvToast && (
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              className="mt-2 flex items-center gap-1.5 px-3 py-1.5 bg-green-900/30 border border-green-700/30 rounded-lg"
+            >
+              <Check className="w-3 h-3 text-green-400" />
+              <span className="text-[10px] font-ui text-green-400">{improvToast}</span>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       {/* World Lore */}
