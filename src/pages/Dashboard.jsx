@@ -364,7 +364,7 @@ export default function Dashboard() {
                     ) : (
                       <div className="flex items-start gap-1 mt-1">
                         <p className="font-crimson text-domain-text-dim text-sm line-clamp-2 flex-1">
-                          {campaign.description || <span className="italic text-domain-text-dim/40">No description</span>}
+                          {campaign.description || <span className="italic text-domain-text-dim/60">No description</span>}
                         </p>
                         <button
                           onClick={(e) => { e.stopPropagation(); setEditingDescId(campaign.id); setEditDescText(campaign.description || ''); }}

@@ -70,7 +70,7 @@ export default function UpgradeModal({ onClose, reason }) {
           Upgrade — $5.99/mo
         </a>
 
-        <p className="text-center text-[10px] font-ui text-domain-text-dim/40 mt-3">
+        <p className="text-center text-[10px] font-ui text-domain-text-dim/60 mt-3">
           Cancel anytime. Includes all current and future DM tools.
         </p>
       </motion.div>

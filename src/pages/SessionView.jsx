@@ -1048,7 +1048,7 @@ export default function SessionView() {
                   onChange={e => setLiveNote(e.target.value)}
                   placeholder={activeNote.raw_notes ? 'Add more notes to this session...' : 'Live session notes... jot down what happens as you play.'}
                   rows={4}
-                  className="w-full px-3 py-2 bg-[rgba(15,12,8,0.50)] border border-domain-panel-border/40 rounded-lg text-domain-text placeholder-domain-text-dim/40 focus:border-eg4h-gold-dark focus:outline-none font-crimson text-sm resize-none"
+                  className="w-full px-3 py-2 bg-[rgba(15,12,8,0.50)] border border-domain-panel-border/40 rounded-lg text-domain-text placeholder-domain-text-dim/60 focus:border-eg4h-gold-dark focus:outline-none font-crimson text-sm resize-none"
                 />
                 <button
                   onClick={saveNote}
@@ -1167,7 +1167,7 @@ export default function SessionView() {
                   value={npcPrompt}
                   onChange={e => setNpcPrompt(e.target.value)}
                   placeholder="a nervous shopkeeper who owes money to the thieves' guild"
-                  className="w-full px-3 py-2 bg-[rgba(15,12,8,0.50)] border border-domain-panel-border/40 rounded-lg text-domain-text placeholder-domain-text-dim/40 focus:border-eg4h-gold-dark focus:outline-none font-crimson text-sm"
+                  className="w-full px-3 py-2 bg-[rgba(15,12,8,0.50)] border border-domain-panel-border/40 rounded-lg text-domain-text placeholder-domain-text-dim/60 focus:border-eg4h-gold-dark focus:outline-none font-crimson text-sm"
                   autoFocus
                 />
                 <p className="text-[10px] font-ui mt-1 mb-2" style={{ color: npcAiMode ? 'rgba(212,160,23,0.6)' : 'rgba(255,255,255,0.25)' }}>
@@ -1197,17 +1197,17 @@ export default function SessionView() {
               <Card className="mb-3 !bg-domain-panel-raised">
                 <p className="text-xs font-cinzel text-domain-text mb-2">Edit NPC</p>
                 <div className="space-y-2">
-                  <input type="text" placeholder="Name" value={npcForm.name} onChange={e => setNpcForm(p => ({ ...p, name: e.target.value }))} className="w-full px-3 py-2 bg-[rgba(15,12,8,0.50)] border border-domain-panel-border/40 rounded-lg text-domain-text placeholder-domain-text-dim/40 focus:border-eg4h-gold-dark focus:outline-none font-crimson text-sm" autoFocus />
+                  <input type="text" placeholder="Name" value={npcForm.name} onChange={e => setNpcForm(p => ({ ...p, name: e.target.value }))} className="w-full px-3 py-2 bg-[rgba(15,12,8,0.50)] border border-domain-panel-border/40 rounded-lg text-domain-text placeholder-domain-text-dim/60 focus:border-eg4h-gold-dark focus:outline-none font-crimson text-sm" autoFocus />
                   <div className="grid grid-cols-2 gap-2">
-                    <input type="text" placeholder="Role" value={npcForm.role} onChange={e => setNpcForm(p => ({ ...p, role: e.target.value }))} className="w-full px-3 py-2 bg-[rgba(15,12,8,0.50)] border border-domain-panel-border/40 rounded-lg text-domain-text placeholder-domain-text-dim/40 focus:border-eg4h-gold-dark focus:outline-none font-crimson text-sm" />
-                    <input type="text" placeholder="Location" value={npcForm.location} onChange={e => setNpcForm(p => ({ ...p, location: e.target.value }))} className="w-full px-3 py-2 bg-[rgba(15,12,8,0.50)] border border-domain-panel-border/40 rounded-lg text-domain-text placeholder-domain-text-dim/40 focus:border-eg4h-gold-dark focus:outline-none font-crimson text-sm" />
+                    <input type="text" placeholder="Role" value={npcForm.role} onChange={e => setNpcForm(p => ({ ...p, role: e.target.value }))} className="w-full px-3 py-2 bg-[rgba(15,12,8,0.50)] border border-domain-panel-border/40 rounded-lg text-domain-text placeholder-domain-text-dim/60 focus:border-eg4h-gold-dark focus:outline-none font-crimson text-sm" />
+                    <input type="text" placeholder="Location" value={npcForm.location} onChange={e => setNpcForm(p => ({ ...p, location: e.target.value }))} className="w-full px-3 py-2 bg-[rgba(15,12,8,0.50)] border border-domain-panel-border/40 rounded-lg text-domain-text placeholder-domain-text-dim/60 focus:border-eg4h-gold-dark focus:outline-none font-crimson text-sm" />
                   </div>
-                  <textarea placeholder="Personality" value={npcForm.personality} onChange={e => setNpcForm(p => ({ ...p, personality: e.target.value }))} rows={2} className="w-full px-3 py-2 bg-[rgba(15,12,8,0.50)] border border-domain-panel-border/40 rounded-lg text-domain-text placeholder-domain-text-dim/40 focus:border-eg4h-gold-dark focus:outline-none font-crimson text-sm resize-none" />
+                  <textarea placeholder="Personality" value={npcForm.personality} onChange={e => setNpcForm(p => ({ ...p, personality: e.target.value }))} rows={2} className="w-full px-3 py-2 bg-[rgba(15,12,8,0.50)] border border-domain-panel-border/40 rounded-lg text-domain-text placeholder-domain-text-dim/60 focus:border-eg4h-gold-dark focus:outline-none font-crimson text-sm resize-none" />
                   <div className="grid grid-cols-2 gap-2">
-                    <input type="text" placeholder="Quirks" value={npcForm.quirks} onChange={e => setNpcForm(p => ({ ...p, quirks: e.target.value }))} className="w-full px-3 py-2 bg-[rgba(15,12,8,0.50)] border border-domain-panel-border/40 rounded-lg text-domain-text placeholder-domain-text-dim/40 focus:border-eg4h-gold-dark focus:outline-none font-crimson text-sm" />
-                    <input type="text" placeholder="Voice notes" value={npcForm.voice_notes} onChange={e => setNpcForm(p => ({ ...p, voice_notes: e.target.value }))} className="w-full px-3 py-2 bg-[rgba(15,12,8,0.50)] border border-domain-panel-border/40 rounded-lg text-domain-text placeholder-domain-text-dim/40 focus:border-eg4h-gold-dark focus:outline-none font-crimson text-sm" />
+                    <input type="text" placeholder="Quirks" value={npcForm.quirks} onChange={e => setNpcForm(p => ({ ...p, quirks: e.target.value }))} className="w-full px-3 py-2 bg-[rgba(15,12,8,0.50)] border border-domain-panel-border/40 rounded-lg text-domain-text placeholder-domain-text-dim/60 focus:border-eg4h-gold-dark focus:outline-none font-crimson text-sm" />
+                    <input type="text" placeholder="Voice notes" value={npcForm.voice_notes} onChange={e => setNpcForm(p => ({ ...p, voice_notes: e.target.value }))} className="w-full px-3 py-2 bg-[rgba(15,12,8,0.50)] border border-domain-panel-border/40 rounded-lg text-domain-text placeholder-domain-text-dim/60 focus:border-eg4h-gold-dark focus:outline-none font-crimson text-sm" />
                   </div>
-                  <input type="text" placeholder="Motivation / Goal" value={npcForm.motivation} onChange={e => setNpcForm(p => ({ ...p, motivation: e.target.value }))} className="w-full px-3 py-2 bg-[rgba(15,12,8,0.50)] border border-domain-panel-border/40 rounded-lg text-domain-text placeholder-domain-text-dim/40 focus:border-eg4h-gold-dark focus:outline-none font-crimson text-sm" />
+                  <input type="text" placeholder="Motivation / Goal" value={npcForm.motivation} onChange={e => setNpcForm(p => ({ ...p, motivation: e.target.value }))} className="w-full px-3 py-2 bg-[rgba(15,12,8,0.50)] border border-domain-panel-border/40 rounded-lg text-domain-text placeholder-domain-text-dim/60 focus:border-eg4h-gold-dark focus:outline-none font-crimson text-sm" />
                   <div className="flex gap-2 pt-1">
                     <button onClick={saveNpcEdit} disabled={!npcForm.name.trim() || savingNpc} className="px-4 py-1.5 text-xs font-cinzel font-semibold text-eg4h-black bg-gradient-to-r from-eg4h-gold to-eg4h-gold-light rounded disabled:opacity-40 disabled:cursor-not-allowed hover:shadow-[0_2px_8px_rgba(255,215,0,0.3)] transition-all cursor-pointer">
                       {savingNpc ? 'Saving...' : 'Update'}
@@ -1268,7 +1268,7 @@ export default function SessionView() {
                   </p>
                 )}
                 {npc.motivation && <p className="text-xs font-crimson text-domain-text-dim mt-0.5">Goal: {npc.motivation}</p>}
-                {npc.first_session && <p className="text-[10px] font-ui text-domain-text-dim/40 mt-0.5">First appeared: Session {npc.first_session}</p>}
+                {npc.first_session && <p className="text-[10px] font-ui text-domain-text-dim/60 mt-0.5">First appeared: Session {npc.first_session}</p>}
                 {npc.personality && <p className="text-xs font-crimson text-domain-text-dim/70 mt-1 italic line-clamp-2">{npc.personality}</p>}
                 {npc.quirks && <p className="text-xs font-crimson text-domain-text-dim/60 mt-0.5">Quirk: {npc.quirks}</p>}
                 {npc.voice_notes && <p className="text-xs font-crimson text-domain-text-dim/60 mt-0.5">Voice: {npc.voice_notes}</p>}
@@ -1384,7 +1384,7 @@ export default function SessionView() {
       <div className="shrink-0">
         <SectionHeader icon={Sparkles} title="AI Improv Assist">
           {isDM && improvCount > 0 && (
-            <span className="text-[10px] font-ui text-domain-text-dim/40">{10 - improvCount}/10 remaining</span>
+            <span className="text-[10px] font-ui text-domain-text-dim/60">{10 - improvCount}/10 remaining</span>
           )}
         </SectionHeader>
         <div className="flex gap-2">
@@ -1650,7 +1650,7 @@ export default function SessionView() {
                 >
                   <ChevronRight className={`w-3 h-3 transition-transform ${expandedSrdCats[category] ? 'rotate-90' : ''}`} />
                   {category.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
-                  <span className="text-[10px] font-ui text-domain-text-dim/40 ml-auto">{entries.length}</span>
+                  <span className="text-[10px] font-ui text-domain-text-dim/60 ml-auto">{entries.length}</span>
                 </button>
                 {expandedSrdCats[category] && (
                   <div className="ml-2 border-l border-domain-panel-border/20 pl-2 py-1 space-y-1.5">
@@ -1741,7 +1741,7 @@ export default function SessionView() {
                             onChange={e => setNoteText(e.target.value)}
                             placeholder="Secret notes about this character..."
                             rows={3}
-                            className="w-full px-2 py-1.5 bg-[rgba(15,12,8,0.60)] border border-domain-amber/20 rounded text-xs text-domain-text placeholder-domain-text-dim/40 focus:border-domain-amber/50 focus:outline-none font-crimson resize-none"
+                            className="w-full px-2 py-1.5 bg-[rgba(15,12,8,0.60)] border border-domain-amber/20 rounded text-xs text-domain-text placeholder-domain-text-dim/60 focus:border-domain-amber/50 focus:outline-none font-crimson resize-none"
                           />
                           <div className="flex gap-2 mt-1.5">
                             <button
@@ -1780,7 +1780,7 @@ export default function SessionView() {
                               value={msgText}
                               onChange={e => setMsgText(e.target.value)}
                               placeholder={`Send a secret message to ${stats.name}...`}
-                              className="flex-1 px-2 py-1.5 bg-[rgba(15,12,8,0.60)] border border-blue-400/20 rounded text-xs text-domain-text placeholder-domain-text-dim/40 focus:border-blue-400/50 focus:outline-none font-crimson"
+                              className="flex-1 px-2 py-1.5 bg-[rgba(15,12,8,0.60)] border border-blue-400/20 rounded text-xs text-domain-text placeholder-domain-text-dim/60 focus:border-blue-400/50 focus:outline-none font-crimson"
                               onKeyDown={e => { if (e.key === 'Enter' && msgText.trim()) sendMessage(m.character_id, m.email); }}
                             />
                             <button
@@ -1877,7 +1877,7 @@ export default function SessionView() {
                 placeholder="Name"
                 value={newCombatant.name}
                 onChange={e => setNewCombatant(p => ({ ...p, name: e.target.value }))}
-                className="px-2 py-1 bg-[rgba(15,12,8,0.50)] border border-domain-panel-border/30 rounded text-xs text-domain-text placeholder-domain-text-dim/40 focus:border-eg4h-gold-dark focus:outline-none font-crimson"
+                className="px-2 py-1 bg-[rgba(15,12,8,0.50)] border border-domain-panel-border/30 rounded text-xs text-domain-text placeholder-domain-text-dim/60 focus:border-eg4h-gold-dark focus:outline-none font-crimson"
                 autoFocus
               />
               <input
@@ -1885,14 +1885,14 @@ export default function SessionView() {
                 placeholder="Init"
                 value={newCombatant.init}
                 onChange={e => setNewCombatant(p => ({ ...p, init: e.target.value }))}
-                className="px-2 py-1 bg-[rgba(15,12,8,0.50)] border border-domain-panel-border/30 rounded text-xs text-domain-text placeholder-domain-text-dim/40 focus:border-eg4h-gold-dark focus:outline-none font-crimson"
+                className="px-2 py-1 bg-[rgba(15,12,8,0.50)] border border-domain-panel-border/30 rounded text-xs text-domain-text placeholder-domain-text-dim/60 focus:border-eg4h-gold-dark focus:outline-none font-crimson"
               />
               <input
                 type="number"
                 placeholder="HP"
                 value={newCombatant.hp}
                 onChange={e => setNewCombatant(p => ({ ...p, hp: e.target.value }))}
-                className="px-2 py-1 bg-[rgba(15,12,8,0.50)] border border-domain-panel-border/30 rounded text-xs text-domain-text placeholder-domain-text-dim/40 focus:border-eg4h-gold-dark focus:outline-none font-crimson"
+                className="px-2 py-1 bg-[rgba(15,12,8,0.50)] border border-domain-panel-border/30 rounded text-xs text-domain-text placeholder-domain-text-dim/60 focus:border-eg4h-gold-dark focus:outline-none font-crimson"
               />
             </div>
             <div className="flex gap-2">
