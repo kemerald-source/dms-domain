@@ -217,6 +217,7 @@ export default function SessionView() {
   const [newCombatant, setNewCombatant] = useState({ name: '', init: '', hp: '' });
   const [showAddCombatant, setShowAddCombatant] = useState(false);
   const [hpInputs, setHpInputs] = useState({});
+  const [expandedNoteId, setExpandedNoteId] = useState(null);
 
   // ─── Tier gate helper ────────────────────────────────────────
   const requireDM = (reason) => {
@@ -540,6 +541,7 @@ export default function SessionView() {
         hp: parseInt(newCombatant.hp) || 0,
         maxHp: parseInt(newCombatant.hp) || 0,
         active: true,
+        notes: '',
       },
     ].sort((a, b) => b.init - a.init));
     setNewCombatant({ name: '', init: '', hp: '' });
@@ -572,6 +574,7 @@ export default function SessionView() {
           maxHp: typeof stats.maxHp === 'number' ? stats.maxHp : 0,
           active: true,
           isParty: true,
+          notes: '',
         };
       });
     setCombatants(prev => [...prev, ...partyCombatants].sort((a, b) => b.init - a.init));
@@ -2027,60 +2030,95 @@ export default function SessionView() {
           <>
             <div className="space-y-1">
               {combatants.map((c, i) => (
-                <div
-                  key={c.id}
-                  className={`flex items-center gap-2 px-2 py-1.5 rounded text-xs ${
-                    i === (combatRound > 0 ? (combatRound - 1) % combatants.length : -1)
-                      ? 'bg-eg4h-gold/10 border border-eg4h-gold-dark/40'
-                      : 'bg-domain-panel/60 border border-domain-panel-border/20'
-                  } ${c.hp === 0 && c.maxHp > 0 ? 'opacity-40' : ''}`}
-                >
-                  <span className="font-ui text-domain-text w-6 text-center">{c.init}</span>
-                  <span className={`font-cinzel flex-1 min-w-0 truncate ${c.isParty ? 'text-eg4h-gold' : 'text-domain-text'}`}>
-                    {c.name}
-                  </span>
-                  {c.maxHp > 0 && (
-                    <div className="flex items-center gap-1 shrink-0">
-                      <span className={`font-ui text-xs w-auto text-center whitespace-nowrap ${
-                        c.hp <= 0 ? 'text-red-500' :
-                        c.hp <= c.maxHp * 0.25 ? 'text-red-400' :
-                        c.hp <= c.maxHp * 0.5 ? 'text-yellow-400' : 'text-green-400'
-                      }`}>
-                        {c.hp}/{c.maxHp}
-                      </span>
-                      <input
-                        type="number"
-                        value={hpInputs[c.id] || ''}
-                        onChange={e => setHpInputs(prev => ({ ...prev, [c.id]: e.target.value }))}
-                        onKeyDown={e => {
-                          const val = parseInt(hpInputs[c.id]) || 0;
-                          if (e.key === 'Enter' && val !== 0) {
-                            adjustHp(c.id, -Math.abs(val));
-                            setHpInputs(prev => ({ ...prev, [c.id]: '' }));
-                          }
-                        }}
-                        placeholder="#"
-                        className="w-10 px-1 py-0.5 text-xs text-center bg-domain-dark border border-domain-panel-border/60 rounded text-domain-text font-ui focus:border-eg4h-gold-dark focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                <div key={c.id}>
+                  <div
+                    className={`flex items-center gap-2 px-2 py-1.5 rounded-t text-xs ${
+                      expandedNoteId === c.id ? 'rounded-b-none' : 'rounded-b'
+                    } ${
+                      i === (combatRound > 0 ? (combatRound - 1) % combatants.length : -1)
+                        ? 'bg-eg4h-gold/10 border border-eg4h-gold-dark/40'
+                        : 'bg-domain-panel/60 border border-domain-panel-border/20'
+                    } ${c.hp === 0 && c.maxHp > 0 ? 'opacity-40' : ''}`}
+                  >
+                    <span className="font-ui text-domain-text w-6 text-center">{c.init}</span>
+                    <button
+                      onClick={() => setExpandedNoteId(prev => prev === c.id ? null : c.id)}
+                      className={`font-cinzel flex-1 min-w-0 truncate text-left cursor-pointer ${c.isParty ? 'text-eg4h-gold' : 'text-domain-text'}`}
+                      title={c.notes ? c.notes.slice(0, 80) : 'Click to add notes'}
+                    >
+                      {c.name}
+                      {c.notes && expandedNoteId !== c.id && (
+                        <span className="font-crimson text-[10px] text-domain-text-dim/50 ml-1.5 font-normal">— {c.notes.length > 40 ? c.notes.slice(0, 40) + '…' : c.notes}</span>
+                      )}
+                    </button>
+                    {!c.notes && (
+                      <button
+                        onClick={() => setExpandedNoteId(prev => prev === c.id ? null : c.id)}
+                        className={`shrink-0 cursor-pointer transition-colors ${expandedNoteId === c.id ? 'text-domain-amber' : 'text-domain-text-dim/30 hover:text-domain-text-dim/60'}`}
+                        title="Add notes"
+                      >
+                        <Pencil className="w-2.5 h-2.5" />
+                      </button>
+                    )}
+                    {c.notes && expandedNoteId !== c.id && (
+                      <span className="shrink-0 w-1.5 h-1.5 rounded-full bg-domain-amber/50" title="Has notes" />
+                    )}
+                    {c.maxHp > 0 && (
+                      <div className="flex items-center gap-1 shrink-0">
+                        <span className={`font-ui text-xs w-auto text-center whitespace-nowrap ${
+                          c.hp <= 0 ? 'text-red-500' :
+                          c.hp <= c.maxHp * 0.25 ? 'text-red-400' :
+                          c.hp <= c.maxHp * 0.5 ? 'text-yellow-400' : 'text-green-400'
+                        }`}>
+                          {c.hp}/{c.maxHp}
+                        </span>
+                        <input
+                          type="number"
+                          value={hpInputs[c.id] || ''}
+                          onChange={e => setHpInputs(prev => ({ ...prev, [c.id]: e.target.value }))}
+                          onKeyDown={e => {
+                            const val = parseInt(hpInputs[c.id]) || 0;
+                            if (e.key === 'Enter' && val !== 0) {
+                              adjustHp(c.id, -Math.abs(val));
+                              setHpInputs(prev => ({ ...prev, [c.id]: '' }));
+                            }
+                          }}
+                          placeholder="#"
+                          className="w-10 px-1 py-0.5 text-xs text-center bg-domain-dark border border-domain-panel-border/60 rounded text-domain-text font-ui focus:border-eg4h-gold-dark focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                        />
+                        <button
+                          onClick={() => { const val = parseInt(hpInputs[c.id]) || 0; if (val) { adjustHp(c.id, -Math.abs(val)); setHpInputs(prev => ({ ...prev, [c.id]: '' })); } }}
+                          className="px-1 py-0.5 text-[10px] font-ui text-red-400 hover:text-red-300 border border-red-900/30 rounded cursor-pointer"
+                          title="Damage"
+                        >
+                          DMG
+                        </button>
+                        <button
+                          onClick={() => { const val = parseInt(hpInputs[c.id]) || 0; if (val) { adjustHp(c.id, Math.abs(val)); setHpInputs(prev => ({ ...prev, [c.id]: '' })); } }}
+                          className="px-1 py-0.5 text-[10px] font-ui text-green-400 hover:text-green-300 border border-green-900/30 rounded cursor-pointer"
+                          title="Heal"
+                        >
+                          HEAL
+                        </button>
+                      </div>
+                    )}
+                    <button onClick={() => removeCombatant(c.id)} className="shrink-0 text-domain-text-dim/40 hover:text-red-400 cursor-pointer ml-1">
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                  {expandedNoteId === c.id && (
+                    <div className="bg-domain-panel/40 border border-t-0 border-domain-panel-border/20 rounded-b px-2 py-1.5">
+                      <textarea
+                        value={c.notes || ''}
+                        onChange={e => setCombatants(prev => prev.map(cb => cb.id === c.id ? { ...cb, notes: e.target.value } : cb))}
+                        placeholder="Conditions, effects, reminders..."
+                        rows={1}
+                        className="w-full px-2 py-1 bg-[rgba(15,12,8,0.40)] border border-domain-panel-border/30 rounded text-xs text-domain-text placeholder-domain-text-dim/50 focus:border-eg4h-gold-dark focus:outline-none font-crimson resize-none"
+                        autoFocus
+                        onInput={e => { e.target.style.height = 'auto'; e.target.style.height = e.target.scrollHeight + 'px'; }}
                       />
-                      <button
-                        onClick={() => { const val = parseInt(hpInputs[c.id]) || 0; if (val) { adjustHp(c.id, -Math.abs(val)); setHpInputs(prev => ({ ...prev, [c.id]: '' })); } }}
-                        className="px-1 py-0.5 text-[10px] font-ui text-red-400 hover:text-red-300 border border-red-900/30 rounded cursor-pointer"
-                        title="Damage"
-                      >
-                        DMG
-                      </button>
-                      <button
-                        onClick={() => { const val = parseInt(hpInputs[c.id]) || 0; if (val) { adjustHp(c.id, Math.abs(val)); setHpInputs(prev => ({ ...prev, [c.id]: '' })); } }}
-                        className="px-1 py-0.5 text-[10px] font-ui text-green-400 hover:text-green-300 border border-green-900/30 rounded cursor-pointer"
-                        title="Heal"
-                      >
-                        HEAL
-                      </button>
                     </div>
                   )}
-                  <button onClick={() => removeCombatant(c.id)} className="shrink-0 text-domain-text-dim/40 hover:text-red-400 cursor-pointer ml-1">
-                    <X className="w-3 h-3" />
-                  </button>
                 </div>
               ))}
             </div>
