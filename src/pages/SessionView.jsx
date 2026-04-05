@@ -168,6 +168,7 @@ export default function SessionView() {
   const [improvError, setImprovError] = useState(null);
   const [improvCount, setImprovCount] = useState(0);
   const [improvToast, setImprovToast] = useState(null);
+  const [selectedImprov, setSelectedImprov] = useState(null);
 
   // Session summary state
   const [sessionSummary, setSessionSummary] = useState(null);
@@ -1407,6 +1408,7 @@ export default function SessionView() {
               setImprovLoading(true);
               setImprovSuggestions([]);
               setImprovError(null);
+              setSelectedImprov(null);
               try {
                 const res = await fetch('/.netlify/functions/ai-improv', {
                   method: 'POST',
@@ -1435,6 +1437,7 @@ export default function SessionView() {
               setImprovLoading(true);
               setImprovSuggestions([]);
               setImprovError(null);
+              setSelectedImprov(null);
               try {
                 const res = await fetch('/.netlify/functions/ai-improv', {
                   method: 'POST',
@@ -1486,38 +1489,54 @@ export default function SessionView() {
         {!improvLoading && improvSuggestions.length > 0 && (
           <div className="mt-3 space-y-2">
             {improvSuggestions.map((s, i) => {
-              const approachIcon = s.approach === 'escalate' ? Zap : s.approach === 'redirect' ? RotateCcw : Layers;
-              const ApproachIcon = approachIcon;
+              const isSelected = selectedImprov === i;
+              const isHidden = selectedImprov !== null && !isSelected;
+              const ApproachIcon = s.approach === 'escalate' ? Zap : s.approach === 'redirect' ? RotateCcw : Layers;
               const approachColor = s.approach === 'escalate' ? 'text-red-400' : s.approach === 'redirect' ? 'text-blue-400' : 'text-purple-400';
-              const borderColor = s.approach === 'escalate' ? 'border-red-800/30' : s.approach === 'redirect' ? 'border-blue-800/30' : 'border-purple-800/30';
+              const borderColor = isSelected ? 'border-eg4h-gold-dark/60' : s.approach === 'escalate' ? 'border-red-800/30' : s.approach === 'redirect' ? 'border-blue-800/30' : 'border-purple-800/30';
               return (
-                <div key={i} className={`p-3 bg-domain-panel/50 border ${borderColor} rounded-lg`}>
+                <div
+                  key={i}
+                  className={`p-3 bg-domain-panel/50 border ${borderColor} rounded-lg transition-all duration-300 ${isHidden ? 'opacity-0 max-h-0 overflow-hidden py-0 my-0 border-0 p-0' : 'opacity-100 max-h-96'}`}
+                >
                   <div className="flex items-center justify-between mb-1.5">
                     <div className="flex items-center gap-1.5">
+                      {isSelected && <Check className="w-3 h-3 text-eg4h-gold" />}
                       <ApproachIcon className={`w-3 h-3 ${approachColor}`} />
-                      <span className={`text-xs font-cinzel font-semibold ${approachColor}`}>{s.label || s.approach}</span>
+                      <span className={`text-xs font-cinzel font-semibold ${isSelected ? 'text-eg4h-gold' : approachColor}`}>{s.label || s.approach}</span>
                     </div>
-                    <button
-                      onClick={async () => {
-                        // Save to session notes
-                        const noteText = `[AI Improv] ${s.text}\n[DM situation: ${improvInput}]`;
-                        const activeNote = sessionNotes.find(n => n.session_number === activeSessionNum);
-                        if (activeNote && supabase) {
-                          const updated = activeNote.raw_notes ? `${activeNote.raw_notes}\n\n${noteText}` : noteText;
-                          const { data, error } = await supabase.from('session_notes').update({ raw_notes: updated }).eq('id', activeNote.id).select().single();
-                          if (!error && data) setSessionNotes(prev => prev.map(n => n.id === data.id ? data : n));
-                        } else if (supabase) {
-                          const nextNum = sessionNotes.length > 0 ? Math.max(...sessionNotes.map(n => n.session_number)) + 1 : 1;
-                          const { data, error } = await supabase.from('session_notes').insert({ campaign_id: campaignId, session_number: nextNum, title: `Session ${nextNum}`, raw_notes: noteText }).select().single();
-                          if (!error && data) { setSessionNotes(prev => [data, ...prev]); setActiveSessionNum(data.session_number); }
-                        }
-                        setImprovToast('Added to session notes');
-                        setTimeout(() => setImprovToast(null), 2500);
-                      }}
-                      className="flex items-center gap-1 px-2 py-0.5 text-[10px] font-ui text-domain-amber border border-domain-warm/30 rounded hover:border-eg4h-gold-dark/50 hover:bg-eg4h-gold/5 transition-colors cursor-pointer"
-                    >
-                      <BookMarked className="w-2.5 h-2.5" /> Use this
-                    </button>
+                    {!isSelected ? (
+                      <button
+                        onClick={async () => {
+                          // Save to session notes
+                          const noteText = `[AI Improv] ${s.text}\n[DM situation: ${improvInput}]`;
+                          const activeNote = sessionNotes.find(n => n.session_number === activeSessionNum);
+                          if (activeNote && supabase) {
+                            const updated = activeNote.raw_notes ? `${activeNote.raw_notes}\n\n${noteText}` : noteText;
+                            const { data, error } = await supabase.from('session_notes').update({ raw_notes: updated }).eq('id', activeNote.id).select().single();
+                            if (!error && data) setSessionNotes(prev => prev.map(n => n.id === data.id ? data : n));
+                          } else if (supabase) {
+                            const nextNum = sessionNotes.length > 0 ? Math.max(...sessionNotes.map(n => n.session_number)) + 1 : 1;
+                            const { data, error } = await supabase.from('session_notes').insert({ campaign_id: campaignId, session_number: nextNum, title: `Session ${nextNum}`, raw_notes: noteText }).select().single();
+                            if (!error && data) { setSessionNotes(prev => [data, ...prev]); setActiveSessionNum(data.session_number); }
+                          }
+                          setSelectedImprov(i);
+                          setImprovToast('Added to session notes');
+                          setTimeout(() => setImprovToast(null), 2500);
+                        }}
+                        className="flex items-center gap-1 px-2 py-0.5 text-[10px] font-ui text-domain-amber border border-domain-warm/30 rounded hover:border-eg4h-gold-dark/50 hover:bg-eg4h-gold/5 transition-colors cursor-pointer"
+                      >
+                        <BookMarked className="w-2.5 h-2.5" /> Use this
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => { setSelectedImprov(null); setImprovSuggestions([]); setImprovInput(''); }}
+                        className="text-domain-text-dim/40 hover:text-domain-text-dim cursor-pointer transition-colors"
+                        title="Dismiss"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                   </div>
                   <p className="text-xs font-crimson text-domain-text-dim leading-relaxed">{s.text}</p>
                   {s.connection && (
