@@ -195,6 +195,10 @@ export default function SessionView() {
   const [npcPrompt, setNpcPrompt] = useState('');
   const [generatingNpc, setGeneratingNpc] = useState(false);
   const [npcAiMode, setNpcAiMode] = useState(null); // null = unset, set on form open
+  // NPC embellish state
+  const [embellishMode, setEmbellishMode] = useState(false);
+  const [embellishing, setEmbellishing] = useState(false);
+  const [aiEmbellishedFields, setAiEmbellishedFields] = useState([]);
 
   // Right panel state
   const [partyMembers, setPartyMembers] = useState([]);
@@ -455,7 +459,48 @@ export default function SessionView() {
       motivation: npc.motivation || '',
       location: npc.location || '',
     });
+    setAiEmbellishedFields([]);
     setShowNpcForm(true);
+  };
+
+  const embellishNpc = async () => {
+    if (!npcForm.name.trim()) return;
+    setEmbellishing(true);
+    try {
+      const res = await fetch('/.netlify/functions/ai-npc-embellish', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          campaignId,
+          userEmail: user?.email,
+          npcInput: {
+            name: npcForm.name.trim(),
+            role: npcForm.role.trim(),
+            personality: npcForm.personality.trim(),
+            quirks: npcForm.quirks.trim(),
+            voice_notes: npcForm.voice_notes.trim(),
+            motivation: npcForm.motivation.trim(),
+            location: npcForm.location.trim(),
+          },
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.npc) {
+        setNpcForm(prev => ({
+          name: data.npc.name || prev.name,
+          role: data.npc.role || prev.role,
+          personality: data.npc.personality || prev.personality,
+          quirks: data.npc.quirks || prev.quirks,
+          voice_notes: data.npc.voice_notes || prev.voice_notes,
+          motivation: data.npc.motivation || prev.motivation,
+          location: data.npc.location || prev.location,
+        }));
+        setAiEmbellishedFields(data.aiFields || []);
+      }
+    } catch (err) {
+      console.error('NPC embellish error:', err);
+    }
+    setEmbellishing(false);
   };
 
   const saveNpcEdit = async () => {
@@ -553,23 +598,22 @@ export default function SessionView() {
 
     // AI generation when toggle is on and user has paid tier
     if (npcAiMode && isDM) try {
-      const res = await fetch('/.netlify/functions/ai-assist', {
+      const res = await fetch('/.netlify/functions/ai-npc-embellish', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          type: 'npc',
-          prompt: npcPrompt.trim() || 'a random NPC the party might encounter in a fantasy town',
-          context: {
-            campaignName: campaign?.name,
-            campaignDescription: campaign?.description,
-            npcs: npcs.slice(0, 10).map(n => ({ name: n.name, role: n.role })),
+          campaignId,
+          userEmail: user?.email,
+          npcInput: {
+            name: '',
+            role: npcPrompt.trim() || 'a random NPC the party might encounter',
           },
         }),
       });
 
       if (res.ok) {
-        const { result } = await res.json();
-        if (result?.name) npcData = result;
+        const { npc } = await res.json();
+        if (npc?.name) npcData = npc;
       }
     } catch (err) {
       console.warn('AI NPC generation failed, using template fallback:', err.message);
@@ -1192,32 +1236,86 @@ export default function SessionView() {
 
         {/* NPC edit form */}
         <AnimatePresence>
-          {showNpcForm && editingNpc && (
+          {showNpcForm && editingNpc && (() => {
+            const npcFieldClass = "w-full px-3 py-2 bg-[rgba(15,12,8,0.50)] border border-domain-panel-border/40 rounded-lg text-domain-text placeholder-domain-text-dim/60 focus:border-eg4h-gold-dark focus:outline-none font-crimson text-sm";
+            const aiFieldClass = "w-full px-3 py-2 bg-[rgba(15,12,8,0.50)] border border-purple-700/40 rounded-lg text-domain-text placeholder-domain-text-dim/60 focus:border-eg4h-gold-dark focus:outline-none font-crimson text-sm";
+            const fieldCls = (key) => aiEmbellishedFields.includes(key) ? aiFieldClass : npcFieldClass;
+            const AiBadge = ({ field }) => aiEmbellishedFields.includes(field) ? <span className="text-[9px] font-ui text-purple-400/70 ml-1">AI</span> : embellishMode ? <Sparkles className="w-2.5 h-2.5 text-domain-amber/30 inline ml-1" /> : null;
+            return (
             <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
               <Card className="mb-3 !bg-domain-panel-raised">
-                <p className="text-xs font-cinzel text-domain-text mb-2">Edit NPC</p>
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs font-cinzel text-domain-text">Edit NPC</p>
+                  <button
+                    onClick={() => {
+                      if (!embellishMode && !isDM) {
+                        requireDM('AI Embellish is a Dungeon Master tier feature.');
+                        return;
+                      }
+                      setEmbellishMode(v => !v);
+                      if (embellishMode) setAiEmbellishedFields([]);
+                    }}
+                    className="flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <span className="text-[10px] font-ui text-domain-text-dim">AI Embellish</span>
+                    <div className={`w-7 h-4 rounded-full relative transition-colors ${embellishMode ? 'bg-purple-600/60' : 'bg-domain-panel-border/40'}`}>
+                      <div className={`absolute top-0.5 w-3 h-3 rounded-full transition-all ${embellishMode ? 'left-3.5 bg-purple-400' : 'left-0.5 bg-domain-text-dim/60'}`} />
+                    </div>
+                  </button>
+                </div>
                 <div className="space-y-2">
-                  <input type="text" placeholder="Name" value={npcForm.name} onChange={e => setNpcForm(p => ({ ...p, name: e.target.value }))} className="w-full px-3 py-2 bg-[rgba(15,12,8,0.50)] border border-domain-panel-border/40 rounded-lg text-domain-text placeholder-domain-text-dim/60 focus:border-eg4h-gold-dark focus:outline-none font-crimson text-sm" autoFocus />
+                  <input type="text" placeholder="Name" value={npcForm.name} onChange={e => { setNpcForm(p => ({ ...p, name: e.target.value })); }} className={npcFieldClass} autoFocus />
                   <div className="grid grid-cols-2 gap-2">
-                    <input type="text" placeholder="Role" value={npcForm.role} onChange={e => setNpcForm(p => ({ ...p, role: e.target.value }))} className="w-full px-3 py-2 bg-[rgba(15,12,8,0.50)] border border-domain-panel-border/40 rounded-lg text-domain-text placeholder-domain-text-dim/60 focus:border-eg4h-gold-dark focus:outline-none font-crimson text-sm" />
-                    <input type="text" placeholder="Location" value={npcForm.location} onChange={e => setNpcForm(p => ({ ...p, location: e.target.value }))} className="w-full px-3 py-2 bg-[rgba(15,12,8,0.50)] border border-domain-panel-border/40 rounded-lg text-domain-text placeholder-domain-text-dim/60 focus:border-eg4h-gold-dark focus:outline-none font-crimson text-sm" />
+                    <div className="relative">
+                      <input type="text" placeholder="Role" value={npcForm.role} onChange={e => { setNpcForm(p => ({ ...p, role: e.target.value })); setAiEmbellishedFields(f => f.filter(k => k !== 'role')); }} className={fieldCls('role')} />
+                      <span className="absolute right-2 top-2.5"><AiBadge field="role" /></span>
+                    </div>
+                    <div className="relative">
+                      <input type="text" placeholder="Location" value={npcForm.location} onChange={e => { setNpcForm(p => ({ ...p, location: e.target.value })); setAiEmbellishedFields(f => f.filter(k => k !== 'location')); }} className={fieldCls('location')} />
+                      <span className="absolute right-2 top-2.5"><AiBadge field="location" /></span>
+                    </div>
                   </div>
-                  <textarea placeholder="Personality" value={npcForm.personality} onChange={e => setNpcForm(p => ({ ...p, personality: e.target.value }))} rows={2} className="w-full px-3 py-2 bg-[rgba(15,12,8,0.50)] border border-domain-panel-border/40 rounded-lg text-domain-text placeholder-domain-text-dim/60 focus:border-eg4h-gold-dark focus:outline-none font-crimson text-sm resize-none" />
+                  <div className="relative">
+                    <textarea placeholder="Personality" value={npcForm.personality} onChange={e => { setNpcForm(p => ({ ...p, personality: e.target.value })); setAiEmbellishedFields(f => f.filter(k => k !== 'personality')); }} rows={2} className={`${fieldCls('personality')} resize-none`} />
+                    <span className="absolute right-2 top-2.5"><AiBadge field="personality" /></span>
+                  </div>
                   <div className="grid grid-cols-2 gap-2">
-                    <input type="text" placeholder="Quirks" value={npcForm.quirks} onChange={e => setNpcForm(p => ({ ...p, quirks: e.target.value }))} className="w-full px-3 py-2 bg-[rgba(15,12,8,0.50)] border border-domain-panel-border/40 rounded-lg text-domain-text placeholder-domain-text-dim/60 focus:border-eg4h-gold-dark focus:outline-none font-crimson text-sm" />
-                    <input type="text" placeholder="Voice notes" value={npcForm.voice_notes} onChange={e => setNpcForm(p => ({ ...p, voice_notes: e.target.value }))} className="w-full px-3 py-2 bg-[rgba(15,12,8,0.50)] border border-domain-panel-border/40 rounded-lg text-domain-text placeholder-domain-text-dim/60 focus:border-eg4h-gold-dark focus:outline-none font-crimson text-sm" />
+                    <div className="relative">
+                      <input type="text" placeholder="Quirks" value={npcForm.quirks} onChange={e => { setNpcForm(p => ({ ...p, quirks: e.target.value })); setAiEmbellishedFields(f => f.filter(k => k !== 'quirks')); }} className={fieldCls('quirks')} />
+                      <span className="absolute right-2 top-2.5"><AiBadge field="quirks" /></span>
+                    </div>
+                    <div className="relative">
+                      <input type="text" placeholder="Voice notes" value={npcForm.voice_notes} onChange={e => { setNpcForm(p => ({ ...p, voice_notes: e.target.value })); setAiEmbellishedFields(f => f.filter(k => k !== 'voice_notes')); }} className={fieldCls('voice_notes')} />
+                      <span className="absolute right-2 top-2.5"><AiBadge field="voice_notes" /></span>
+                    </div>
                   </div>
-                  <input type="text" placeholder="Motivation / Goal" value={npcForm.motivation} onChange={e => setNpcForm(p => ({ ...p, motivation: e.target.value }))} className="w-full px-3 py-2 bg-[rgba(15,12,8,0.50)] border border-domain-panel-border/40 rounded-lg text-domain-text placeholder-domain-text-dim/60 focus:border-eg4h-gold-dark focus:outline-none font-crimson text-sm" />
+                  <div className="relative">
+                    <input type="text" placeholder="Motivation / Goal" value={npcForm.motivation} onChange={e => { setNpcForm(p => ({ ...p, motivation: e.target.value })); setAiEmbellishedFields(f => f.filter(k => k !== 'motivation')); }} className={fieldCls('motivation')} />
+                    <span className="absolute right-2 top-2.5"><AiBadge field="motivation" /></span>
+                  </div>
                   <div className="flex gap-2 pt-1">
-                    <button onClick={saveNpcEdit} disabled={!npcForm.name.trim() || savingNpc} className="px-4 py-1.5 text-xs font-cinzel font-semibold text-eg4h-black bg-gradient-to-r from-eg4h-gold to-eg4h-gold-light rounded disabled:opacity-40 disabled:cursor-not-allowed hover:shadow-[0_2px_8px_rgba(255,215,0,0.3)] transition-all cursor-pointer">
+                    {embellishMode && (
+                      <button
+                        onClick={embellishNpc}
+                        disabled={!npcForm.name.trim() || embellishing}
+                        className="px-3 py-1.5 text-xs font-ui text-purple-300 border border-purple-700/40 rounded hover:border-purple-500/60 hover:bg-purple-900/20 transition-colors cursor-pointer disabled:opacity-40"
+                      >
+                        {embellishing ? <><Loader2 className="w-3 h-3 animate-spin inline mr-1" />Embellishing...</> : <><Sparkles className="w-3 h-3 inline mr-1" />Embellish</>}
+                      </button>
+                    )}
+                    <button onClick={saveNpcEdit} disabled={!npcForm.name.trim() || savingNpc || embellishing} className="px-4 py-1.5 text-xs font-cinzel font-semibold text-eg4h-black bg-gradient-to-r from-eg4h-gold to-eg4h-gold-light rounded disabled:opacity-40 disabled:cursor-not-allowed hover:shadow-[0_2px_8px_rgba(255,215,0,0.3)] transition-all cursor-pointer">
                       {savingNpc ? 'Saving...' : 'Update'}
                     </button>
-                    <button onClick={() => { setShowNpcForm(false); setEditingNpc(null); }} className="px-3 py-1.5 text-xs font-ui text-domain-text-dim hover:text-domain-text cursor-pointer">Cancel</button>
+                    <button onClick={() => { setShowNpcForm(false); setEditingNpc(null); setAiEmbellishedFields([]); }} className="px-3 py-1.5 text-xs font-ui text-domain-text-dim hover:text-domain-text cursor-pointer">Cancel</button>
                   </div>
+                  {aiEmbellishedFields.length > 0 && (
+                    <p className="text-[10px] font-ui text-purple-400/60 mt-1">Fields marked <span className="text-purple-400">AI</span> were embellished — edit any field to make it yours</p>
+                  )}
                 </div>
               </Card>
             </motion.div>
-          )}
+            );
+          })()}
         </AnimatePresence>
 
         {npcs.length === 0 && !showNpcGen ? (
