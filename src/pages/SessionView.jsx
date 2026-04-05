@@ -62,7 +62,7 @@ const URGENCY_COLORS = {
 // ─── Quick NPC generator data ───────────────────────────────
 const NPC_FIRST = ['Aldric','Brenna','Cedric','Delara','Eamon','Fiona','Gareth','Helena','Idris','Jasira','Kael','Lyria','Magnus','Nara','Orin','Petra','Quinn','Rowan','Sable','Theron','Ursa','Vesper','Wren','Xara','Yoren','Zella','Dorian','Elara','Fenwick','Greta','Haldan','Isolde','Jorik','Kessa','Lothar','Miriel','Niles','Olwen','Phelan','Rhiannon','Stellan','Tova','Ulfric','Vara','Wynne'];
 const NPC_LAST = ['Ashford','Blackthorn','Copperfield','Duskwalker','Emberstone','Foxglove','Greymane','Holloway','Ironforge','Jasperwind','Knightley','Larkwood','Moonvale','Nighthollow','Oakhart','Pinecrest','Quillbrook','Ravenscar','Stormhaven','Thornwall','Underhill','Vexley','Whitmore','Yarrow','Zephyrs'];
-const NPC_ROLES = { shopkeeper: 'Shopkeeper', merchant: 'Merchant', guard: 'Town Guard', noble: 'Noble', bartender: 'Bartender', innkeeper: 'Innkeeper', blacksmith: 'Blacksmith', priest: 'Priest', beggar: 'Beggar', farmer: 'Farmer', sailor: 'Sailor', scholar: 'Scholar', thief: 'Thief', bard: 'Traveling Bard', witch: 'Hedge Witch', hunter: 'Hunter', courier: 'Courier', healer: 'Healer', mayor: 'Town Elder', captain: 'Guard Captain', wizard: 'Wizard', alchemist: 'Alchemist', spy: 'Spy', assassin: 'Assassin' };
+const NPC_ROLES = { shopkeeper: 'Shopkeeper', merchant: 'Merchant', guard: 'Town Guard', noble: 'Noble', bartender: 'Bartender', innkeeper: 'Innkeeper', blacksmith: 'Blacksmith', priest: 'Priest', beggar: 'Beggar', farmer: 'Farmer', sailor: 'Sailor', scholar: 'Scholar', thief: 'Thief', bard: 'Traveling Bard', witch: 'Hedge Witch', hunter: 'Hunter', courier: 'Courier', healer: 'Healer', mayor: 'Town Elder', captain: 'Guard Captain', wizard: 'Wizard', alchemist: 'Alchemist', spy: 'Spy', assassin: 'Assassin', monk: 'Monk', paladin: 'Paladin', ranger: 'Ranger', druid: 'Druid', cleric: 'Cleric', warlock: 'Warlock', sorcerer: 'Sorcerer', knight: 'Knight', squire: 'Squire', herbalist: 'Herbalist', librarian: 'Librarian', smuggler: 'Smuggler', pirate: 'Pirate', cook: 'Cook', miner: 'Miner', fisher: 'Fisher', hermit: 'Hermit' };
 const NPC_PERSONALITIES = ['Warm and welcoming, always offering tea','Suspicious of strangers, speaks in clipped sentences','Overly cheerful, deflects serious topics with jokes','Melancholic and wistful, often lost in thought','Brash and confident, talks over others','Quiet and observant, notices everything','Nervous and fidgety, avoids eye contact','Sarcastic and dry, hides kindness behind wit','Fiercely loyal, protective of their community','Greedy and calculating, always angling for profit','Devoutly religious, quotes scripture constantly','Haunted by past mistakes, seeks redemption','Ambitious and ruthless, always scheming','Kind but naive, trusts too easily','Gruff exterior hiding a heart of gold'];
 const NPC_QUIRKS = ['Constantly polishes the same spot on the counter','Collects unusual buttons and shows them to anyone who will look','Hums an eerie tune under their breath','Always carries a worn letter they never open','Speaks to an invisible companion','Has a distinctive laugh that fills the room','Taps their fingers in a rhythmic pattern when thinking','Squints at people as if trying to remember them','Offers unsolicited advice about everything','Always eating something, crumbs everywhere','Refers to themselves in the third person','Ends every sentence with a proverb or saying','Has a pet rat/toad/raven on their shoulder','Sketches people they meet in a small journal','Limps slightly but refuses to explain why'];
 const NPC_MOTIVATIONS = ['Protecting a dark family secret','Paying off a massive debt to a dangerous creditor','Searching for a missing loved one','Trying to leave town before something bad happens','Building enough wealth to retire somewhere warm','Atoning for a crime no one knows about','Gathering information for a mysterious patron','Keeping the peace at any cost','Hoarding supplies for an anticipated disaster','Winning the affection of someone out of their league','Hiding from someone or something from their past','Seeking revenge for a wrong done long ago','Collecting rare ingredients for a special purpose','Proving themselves worthy to their family','Uncovering the truth behind local disappearances'];
@@ -75,7 +75,67 @@ function detectRole(desc) {
   for (const [keyword, role] of Object.entries(NPC_ROLES)) {
     if (lower.includes(keyword)) return role;
   }
-  return 'Commoner';
+  return null;
+}
+
+function parseNpcInput(input) {
+  if (!input || !input.trim()) return {};
+  const text = input.trim();
+  const result = {};
+
+  // Try to extract "Name, Role" or "Name - Role" pattern at the start
+  const nameRoleMatch = text.match(/^([A-Z][a-zA-Z'']+(?:\s+[A-Z][a-zA-Z'']+)*)\s*[,\-–—]\s*(.+)/);
+  if (nameRoleMatch) {
+    result.name = nameRoleMatch[1].trim();
+    const rest = nameRoleMatch[2].trim();
+    // Check if the rest starts with a role keyword
+    const detectedRole = detectRole(rest);
+    if (detectedRole) {
+      result.role = detectedRole;
+      // Anything after the role keyword might be more description
+      const roleIdx = rest.toLowerCase().indexOf(Object.keys(NPC_ROLES).find(k => rest.toLowerCase().includes(k)) || '');
+      const roleWord = Object.keys(NPC_ROLES).find(k => rest.toLowerCase().includes(k)) || '';
+      const afterRole = rest.slice(roleIdx + roleWord.length).replace(/^[\s,\-–—]+/, '').trim();
+      if (afterRole) result.personality = afterRole;
+    } else {
+      // The rest is a description, not a known role — use it as role text
+      result.role = rest.split(/[,.]/)[0].trim();
+      const afterFirstClause = rest.slice(result.role.length).replace(/^[\s,]+/, '').trim();
+      if (afterFirstClause) result.personality = afterFirstClause;
+    }
+    return result;
+  }
+
+  // Try to extract just a capitalized name at the start (2+ capitalized words)
+  const nameOnlyMatch = text.match(/^([A-Z][a-zA-Z'']+(?:\s+[A-Z][a-zA-Z'']+)+)\s+(.+)/);
+  if (nameOnlyMatch) {
+    const possibleName = nameOnlyMatch[1];
+    const rest = nameOnlyMatch[2];
+    // Only treat as name if it's 2-3 words and followed by lowercase description
+    if (possibleName.split(/\s+/).length <= 3 && /^[a-z]/.test(rest)) {
+      result.name = possibleName;
+      result.role = detectRole(rest);
+      // Extract goal: pattern
+      const goalMatch = rest.match(/goal:\s*(.+?)(?:\.|$)/i);
+      if (goalMatch) result.motivation = goalMatch[1].trim();
+      // Whatever remains is personality/description
+      const descPart = rest.replace(/goal:\s*.+?(?:\.|$)/i, '').trim();
+      if (descPart && !result.role) result.role = descPart.split(/[,.]/)[0].trim();
+      else if (descPart && descPart !== result.role) result.personality = descPart;
+      return result;
+    }
+  }
+
+  // No name detected — treat the whole input as a description
+  result.role = detectRole(text);
+  // Extract goal: pattern
+  const goalMatch = text.match(/goal:\s*(.+?)(?:\.|$)/i);
+  if (goalMatch) result.motivation = goalMatch[1].trim();
+  // Use the input (minus goal) as personality
+  const descPart = text.replace(/goal:\s*.+?(?:\.|$)/i, '').trim();
+  if (descPart) result.personality = descPart;
+
+  return result;
 }
 
 // ─── Extract stats from CE character_data ───────────────────
@@ -622,14 +682,15 @@ export default function SessionView() {
       console.warn('AI NPC generation failed, using template fallback:', err.message);
     }
 
-    // Template fallback if AI fails
+    // Template fallback — parse user input, fill gaps with random
     if (!npcData) {
+      const parsed = parseNpcInput(npcPrompt);
       npcData = {
-        name: `${pickRandom(NPC_FIRST)} ${pickRandom(NPC_LAST)}`,
-        role: npcPrompt.trim() ? detectRole(npcPrompt) : pickRandom(Object.values(NPC_ROLES)),
-        personality: pickRandom(NPC_PERSONALITIES),
+        name: parsed.name || `${pickRandom(NPC_FIRST)} ${pickRandom(NPC_LAST)}`,
+        role: parsed.role || pickRandom(Object.values(NPC_ROLES)),
+        personality: parsed.personality || pickRandom(NPC_PERSONALITIES),
         quirks: pickRandom(NPC_QUIRKS),
-        motivation: pickRandom(NPC_MOTIVATIONS),
+        motivation: parsed.motivation || pickRandom(NPC_MOTIVATIONS),
         voice_notes: pickRandom(NPC_VOICES),
       };
     }
