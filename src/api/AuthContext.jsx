@@ -81,19 +81,39 @@ export function AuthProvider({ children }) {
     loadIdentityWidget().then((identity) => {
       identity.init();
 
+      // Retry reading user metadata if initial data is incomplete
+      const setUserWithRetry = (netlifyUser) => {
+        const normalized = normalizeUser(netlifyUser);
+        setUser(normalized);
+        // If metadata wasn't ready (name fell back to email prefix or 'User'), retry
+        const hasFullMeta = netlifyUser?.user_metadata?.full_name || netlifyUser?.user_metadata?.name;
+        if (!hasFullMeta) {
+          const retryDelays = [300, 800, 1500];
+          retryDelays.forEach(ms => setTimeout(() => {
+            const refreshed = identity.currentUser();
+            if (refreshed) {
+              const refreshedMeta = refreshed.user_metadata || {};
+              if (refreshedMeta.full_name || refreshedMeta.name) {
+                setUser(normalizeUser(refreshed));
+              }
+            }
+          }, ms));
+        }
+      };
+
       const currentUser = identity.currentUser();
-      if (currentUser) setUser(normalizeUser(currentUser));
+      if (currentUser) setUserWithRetry(currentUser);
 
       identity.on('init', (initUser) => {
         if (initUser) {
-          setUser(normalizeUser(initUser));
+          setUserWithRetry(initUser);
           cleanupIdentityWidget();
         }
         setLoading(false);
       });
 
       identity.on('login', (loginUser) => {
-        setUser(normalizeUser(loginUser));
+        setUserWithRetry(loginUser);
         identity.close();
         cleanupIdentityWidget();
 
