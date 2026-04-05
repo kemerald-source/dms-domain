@@ -34,7 +34,10 @@ export default function Dashboard() {
 
   // Fetch campaigns and parties
   useEffect(() => {
-    if (!user?.email || !supabase) return;
+    if (!user?.email || !supabase) {
+      setLoading(false);
+      return;
+    }
 
     async function fetchData() {
       setLoading(true);
@@ -129,7 +132,7 @@ export default function Dashboard() {
   }, [user?.email]);
 
   const handleCreate = async () => {
-    if (!newName.trim() || !supabase || !user?.email) return;
+    if (!newName.trim() || !supabase || !user?.email || creating) return;
     setCreating(true);
 
     const { data, error } = await supabase

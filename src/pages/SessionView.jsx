@@ -208,6 +208,7 @@ export default function SessionView() {
   const [combatRound, setCombatRound] = useState(0);
   const [newCombatant, setNewCombatant] = useState({ name: '', init: '', hp: '' });
   const [showAddCombatant, setShowAddCombatant] = useState(false);
+  const [hpInputs, setHpInputs] = useState({});
 
   // ─── Tier gate helper ────────────────────────────────────────
   const requireDM = (reason) => {
@@ -284,18 +285,23 @@ export default function SessionView() {
           const players = members.filter(m =>
             m.role !== 'dm' &&
             m.character_id &&
-            (!m.email || m.email.toLowerCase() !== dmEmail)
+            (!(m.user_email || m.email) || (m.user_email || m.email || '').toLowerCase() !== dmEmail)
           );
           const charIds = players.map(m => m.character_id);
 
           if (charIds.length > 0) {
-            const { data: chars } = await supabase
+            const { data: chars, error: charErr } = await supabase
               .from('characters')
               .select('id, character_data')
               .in('id', charIds);
 
+            if (charErr) console.error('Error fetching character data:', charErr);
+
             const charMap = {};
-            (chars || []).forEach(c => { charMap[c.id] = c.character_data; });
+            (chars || []).forEach(c => {
+              const cd = typeof c.character_data === 'string' ? JSON.parse(c.character_data) : c.character_data;
+              charMap[c.id] = cd;
+            });
 
             setPartyMembers(players.map(m => ({
               ...m,
@@ -497,7 +503,7 @@ export default function SessionView() {
 
   const adjustHp = (id, delta) => {
     setCombatants(prev => prev.map(c =>
-      c.id === id ? { ...c, hp: Math.max(0, c.hp + delta) } : c
+      c.id === id ? { ...c, hp: c.hp + delta } : c
     ));
   };
 
@@ -1280,9 +1286,9 @@ export default function SessionView() {
   const ghostBtnClass = "px-3 py-1.5 text-xs font-ui text-domain-text-dim hover:text-domain-text cursor-pointer";
 
   const CenterPanel = (
-    <div className="flex flex-col gap-5 h-full">
+    <div className="flex flex-col gap-5 h-full min-h-0">
       {/* Story Threads */}
-      <div>
+      <div className="flex-1 min-h-0 overflow-y-auto">
         <SectionHeader icon={Scroll} title={`Story Threads${!isDM ? ` (${threads.length}/${FREE_LIMITS.threads})` : ''}`}>
           <button onClick={openNewThread} className="flex items-center gap-1 px-2 py-1 text-xs font-ui text-domain-amber border border-domain-panel-border/50 rounded hover:border-eg4h-gold-dark/60 transition-colors cursor-pointer">
             <Plus className="w-3 h-3" /> New Thread
@@ -1371,7 +1377,7 @@ export default function SessionView() {
       </div>
 
       {/* AI Improv Assist */}
-      <div>
+      <div className="shrink-0">
         <SectionHeader icon={Sparkles} title="AI Improv Assist" />
         <div className="flex gap-2">
           <input
@@ -1467,7 +1473,7 @@ export default function SessionView() {
       </div>
 
       {/* World Lore */}
-      <div>
+      <div className="shrink-0">
         <SectionHeader icon={Globe} title={`World Lore${!isDM ? ` (${lore.length}/${FREE_LIMITS.lore})` : ''}`}>
           <button onClick={openNewLore} className="flex items-center gap-1 px-2 py-1 text-xs font-ui text-domain-amber border border-domain-panel-border/50 rounded hover:border-eg4h-gold-dark/60 transition-colors cursor-pointer">
             <Plus className="w-3 h-3" /> New Entry
@@ -1840,26 +1846,49 @@ export default function SessionView() {
                   } ${c.hp === 0 && c.maxHp > 0 ? 'opacity-40' : ''}`}
                 >
                   <span className="font-ui text-domain-text w-6 text-center">{c.init}</span>
-                  <span className={`font-cinzel flex-1 ${c.isParty ? 'text-eg4h-gold' : 'text-domain-text'}`}>
+                  <span className={`font-cinzel flex-1 min-w-0 truncate ${c.isParty ? 'text-eg4h-gold' : 'text-domain-text'}`}>
                     {c.name}
                   </span>
                   {c.maxHp > 0 && (
-                    <div className="flex items-center gap-1">
-                      <button onClick={() => adjustHp(c.id, -1)} className="text-red-400 hover:text-red-300 cursor-pointer">
-                        <ChevronDown className="w-3 h-3" />
-                      </button>
-                      <span className={`font-ui w-12 text-center ${
+                    <div className="flex items-center gap-1 shrink-0">
+                      <span className={`font-ui text-xs w-auto text-center whitespace-nowrap ${
+                        c.hp <= 0 ? 'text-red-500' :
                         c.hp <= c.maxHp * 0.25 ? 'text-red-400' :
                         c.hp <= c.maxHp * 0.5 ? 'text-yellow-400' : 'text-green-400'
                       }`}>
                         {c.hp}/{c.maxHp}
                       </span>
-                      <button onClick={() => adjustHp(c.id, 1)} className="text-green-400 hover:text-green-300 cursor-pointer">
-                        <ChevronUp className="w-3 h-3" />
+                      <input
+                        type="number"
+                        value={hpInputs[c.id] || ''}
+                        onChange={e => setHpInputs(prev => ({ ...prev, [c.id]: e.target.value }))}
+                        onKeyDown={e => {
+                          const val = parseInt(hpInputs[c.id]) || 0;
+                          if (e.key === 'Enter' && val !== 0) {
+                            adjustHp(c.id, -Math.abs(val));
+                            setHpInputs(prev => ({ ...prev, [c.id]: '' }));
+                          }
+                        }}
+                        placeholder="#"
+                        className="w-10 px-1 py-0.5 text-xs text-center bg-domain-dark border border-domain-panel-border/60 rounded text-domain-text font-ui focus:border-eg4h-gold-dark focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                      />
+                      <button
+                        onClick={() => { const val = parseInt(hpInputs[c.id]) || 0; if (val) { adjustHp(c.id, -Math.abs(val)); setHpInputs(prev => ({ ...prev, [c.id]: '' })); } }}
+                        className="px-1 py-0.5 text-[10px] font-ui text-red-400 hover:text-red-300 border border-red-900/30 rounded cursor-pointer"
+                        title="Damage"
+                      >
+                        DMG
+                      </button>
+                      <button
+                        onClick={() => { const val = parseInt(hpInputs[c.id]) || 0; if (val) { adjustHp(c.id, Math.abs(val)); setHpInputs(prev => ({ ...prev, [c.id]: '' })); } }}
+                        className="px-1 py-0.5 text-[10px] font-ui text-green-400 hover:text-green-300 border border-green-900/30 rounded cursor-pointer"
+                        title="Heal"
+                      >
+                        HEAL
                       </button>
                     </div>
                   )}
-                  <button onClick={() => removeCombatant(c.id)} className="text-domain-text-dim/40 hover:text-red-400 cursor-pointer">
+                  <button onClick={() => removeCombatant(c.id)} className="shrink-0 text-domain-text-dim/40 hover:text-red-400 cursor-pointer ml-1">
                     <X className="w-3 h-3" />
                   </button>
                 </div>
