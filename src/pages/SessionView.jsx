@@ -1284,7 +1284,7 @@ export default function SessionView() {
   // CENTER PANEL — Plot & Story Threads
   // ═══════════════════════════════════════════════════════════════
 
-  const inputClass = "w-full px-3 py-2 bg-[rgba(15,12,8,0.50)] border border-domain-panel-border/40 rounded-lg text-domain-text placeholder-domain-text-dim/40 focus:border-eg4h-gold-dark focus:outline-none font-crimson text-sm";
+  const inputClass = "w-full px-3 py-2 bg-[rgba(15,12,8,0.50)] border border-domain-panel-border/40 rounded-lg text-domain-text placeholder-domain-text-dim/60 focus:border-eg4h-gold-dark focus:outline-none font-crimson text-sm";
   const selectClass = "w-full px-3 py-2 bg-[rgba(15,12,8,0.50)] border border-domain-panel-border/40 rounded-lg text-domain-text focus:border-eg4h-gold-dark focus:outline-none font-crimson text-sm";
   const goldBtnClass = "px-4 py-1.5 text-xs font-cinzel font-semibold text-eg4h-black bg-gradient-to-r from-eg4h-gold to-eg4h-gold-light rounded disabled:opacity-40 disabled:cursor-not-allowed hover:shadow-[0_2px_8px_rgba(255,215,0,0.3)] transition-all cursor-pointer";
   const ghostBtnClass = "px-3 py-1.5 text-xs font-ui text-domain-text-dim hover:text-domain-text cursor-pointer";
@@ -1463,7 +1463,7 @@ export default function SessionView() {
             {improvLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
           </button>
         </div>
-        <p className="text-[10px] font-ui text-domain-text-dim/40 mt-1">Describe what happened — get 3 ways to run with it</p>
+        <p className="text-[10px] font-ui text-domain-text-dim/60 mt-1">Describe what happened — get 3 ways to run with it</p>
 
         {/* Loading skeleton */}
         {improvLoading && (
