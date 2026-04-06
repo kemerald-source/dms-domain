@@ -512,9 +512,12 @@ export default function SessionView() {
     setShowManualForm(true);
   };
 
+  const [manualError, setManualError] = useState(null);
+
   const saveManualChar = async () => {
     if (!manualForm.name.trim() || !manualForm.class.trim() || !supabase) return;
     setSavingManual(true);
+    setManualError(null);
 
     const payload = {
       campaign_id: campaignId,
@@ -537,18 +540,26 @@ export default function SessionView() {
         .eq('id', editingManualChar.id)
         .select()
         .single();
-      if (!error && data) {
-        setManualChars(prev => prev.map(mc => mc.id === data.id ? data : mc));
+      if (error) {
+        console.error('Error updating manual character:', error);
+        setManualError(error.message);
+        setSavingManual(false);
+        return;
       }
+      if (data) setManualChars(prev => prev.map(mc => mc.id === data.id ? data : mc));
     } else {
       const { data, error } = await supabase
         .from('manual_characters')
         .insert(payload)
         .select()
         .single();
-      if (!error && data) {
-        setManualChars(prev => [...prev, data]);
+      if (error) {
+        console.error('Error adding manual character:', error);
+        setManualError(error.message);
+        setSavingManual(false);
+        return;
       }
+      if (data) setManualChars(prev => [...prev, data]);
     }
 
     setSavingManual(false);
@@ -2058,12 +2069,15 @@ export default function SessionView() {
             </div>
             <textarea placeholder="Notes (backstory, bonds, quirks...)" value={manualForm.notes} onChange={e => setManualForm(f => ({ ...f, notes: e.target.value }))} rows={2}
               className="w-full px-2 py-1.5 mb-2 bg-[rgba(15,12,8,0.50)] border border-domain-panel-border/30 rounded text-xs text-domain-text placeholder-domain-text-dim/60 focus:border-eg4h-gold-dark focus:outline-none font-crimson resize-none" />
+            {manualError && (
+              <p className="text-[10px] font-ui text-red-400 mb-1.5">{manualError}</p>
+            )}
             <div className="flex gap-2">
               <button onClick={saveManualChar} disabled={!manualForm.name.trim() || !manualForm.class.trim() || savingManual}
                 className="px-3 py-1.5 text-[10px] font-cinzel font-semibold text-eg4h-black bg-gradient-to-r from-eg4h-gold to-eg4h-gold-light rounded disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer">
                 {savingManual ? 'Saving...' : editingManualChar ? 'Update' : 'Add'}
               </button>
-              <button onClick={resetManualForm}
+              <button onClick={() => { resetManualForm(); setManualError(null); }}
                 className="px-3 py-1.5 text-[10px] font-ui text-domain-text-dim hover:text-domain-text transition-colors cursor-pointer">
                 Cancel
               </button>
