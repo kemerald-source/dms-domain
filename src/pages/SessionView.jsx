@@ -6,6 +6,7 @@ import {
   Scroll, Sparkles, Globe, ChevronUp, ChevronDown, Shield,
   Heart, Eye, X, GripVertical, Pencil, Save, Lock, EyeOff, Dices,
   ChevronRight, BookMarked, MapPin, Clock, Mail, MailOpen, Check, Zap, RotateCcw, Layers, Link2,
+  ImageIcon, Upload, Tag,
 } from 'lucide-react';
 import { useAuth } from '@/api/AuthContext';
 import { supabase } from '@/lib/supabase';
@@ -246,6 +247,19 @@ export default function SessionView() {
   const [loreForm, setLoreForm] = useState({ name: '', type: 'location', description: '', notes: '' });
   const [savingLore, setSavingLore] = useState(false);
 
+  // Gallery state
+  const [galleryImages, setGalleryImages] = useState([]);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [previewImage, setPreviewImage] = useState(null);
+  const [editingCaption, setEditingCaption] = useState(null);
+  const [captionText, setCaptionText] = useState('');
+  const [linkingNpcImageId, setLinkingNpcImageId] = useState(null);
+
+  // NPC image upload state
+  const [uploadingNpcImage, setUploadingNpcImage] = useState(null);
+  const npcImageInputRef = useRef(null);
+  const galleryInputRef = useRef(null);
+
   // SRD Quick Reference state
   const [srdRef, setSrdRef] = useState({});
   const [expandedSrdCats, setExpandedSrdCats] = useState({});
@@ -413,6 +427,14 @@ export default function SessionView() {
           }
         }
       }
+
+      // Fetch gallery images for this campaign
+      const { data: galleryData } = await supabase
+        .from('campaign_images')
+        .select('*')
+        .eq('campaign_id', campaignId)
+        .order('created_at', { ascending: false });
+      setGalleryImages(galleryData || []);
 
       // Fetch manual characters for this campaign
       const { data: manualData } = await supabase
@@ -587,6 +609,135 @@ export default function SessionView() {
     if (!error && data) {
       setManualChars(prev => prev.map(mc => mc.id === data.id ? data : mc));
     }
+  };
+
+  // ─── Image upload helpers ─────────────────────────────────────
+  const ACCEPTED_IMAGE_TYPES = 'image/jpeg,image/png,image/webp,image/gif';
+  const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+
+  const uploadImageToStorage = async (file) => {
+    if (!supabase || !file) return null;
+    if (file.size > MAX_FILE_SIZE) { alert('Image must be under 5MB.'); return null; }
+    const ext = file.name.split('.').pop().toLowerCase();
+    const id = crypto.randomUUID();
+    const path = `${campaignId}/${id}.${ext}`;
+    const { error } = await supabase.storage.from('campaign-images').upload(path, file, { contentType: file.type });
+    if (error) { console.error('Upload failed:', error); alert('Upload failed: ' + error.message); return null; }
+    const { data: urlData } = supabase.storage.from('campaign-images').getPublicUrl(path);
+    return urlData?.publicUrl || null;
+  };
+
+  const removeImageFromStorage = async (url) => {
+    if (!supabase || !url) return;
+    // Extract path from public URL: .../campaign-images/{campaignId}/{file}
+    const match = url.match(/campaign-images\/(.+)$/);
+    if (match) await supabase.storage.from('campaign-images').remove([match[1]]);
+  };
+
+  // ─── NPC image upload ───────────────────────────────────────
+  const handleNpcImageUpload = async (npcId, file) => {
+    if (!file || !supabase) return;
+    setUploadingNpcImage(npcId);
+
+    // If NPC already has an image, remove old from storage + gallery
+    const npc = npcs.find(n => n.id === npcId);
+    if (npc?.image_url) {
+      await removeImageFromStorage(npc.image_url);
+      // Remove old gallery entry
+      const oldGallery = galleryImages.find(g => g.image_url === npc.image_url);
+      if (oldGallery) {
+        await supabase.from('campaign_images').delete().eq('id', oldGallery.id);
+        setGalleryImages(prev => prev.filter(g => g.id !== oldGallery.id));
+      }
+    }
+
+    const url = await uploadImageToStorage(file);
+    if (url) {
+      // Update NPC record
+      const { data, error } = await supabase.from('npcs').update({ image_url: url }).eq('id', npcId).select().single();
+      if (!error && data) setNpcs(prev => prev.map(n => n.id === data.id ? data : n));
+
+      // Also add to gallery as portrait
+      const npcName = npc?.name || 'NPC';
+      const { data: gData } = await supabase.from('campaign_images')
+        .insert({ campaign_id: campaignId, image_url: url, caption: npcName, tag: 'portrait' })
+        .select().single();
+      if (gData) setGalleryImages(prev => [gData, ...prev]);
+    }
+    setUploadingNpcImage(null);
+  };
+
+  const removeNpcImage = async (npcId) => {
+    if (!supabase) return;
+    const npc = npcs.find(n => n.id === npcId);
+    if (!npc?.image_url) return;
+
+    await removeImageFromStorage(npc.image_url);
+    // Remove gallery entry
+    const galleryEntry = galleryImages.find(g => g.image_url === npc.image_url);
+    if (galleryEntry) {
+      await supabase.from('campaign_images').delete().eq('id', galleryEntry.id);
+      setGalleryImages(prev => prev.filter(g => g.id !== galleryEntry.id));
+    }
+    // Clear NPC image_url
+    const { data } = await supabase.from('npcs').update({ image_url: null }).eq('id', npcId).select().single();
+    if (data) setNpcs(prev => prev.map(n => n.id === data.id ? data : n));
+  };
+
+  // ─── Gallery CRUD ───────────────────────────────────────────
+  const handleGalleryUpload = async (file) => {
+    if (!file || !supabase) return;
+    setUploadingImage(true);
+    const url = await uploadImageToStorage(file);
+    if (url) {
+      const { data } = await supabase.from('campaign_images')
+        .insert({ campaign_id: campaignId, image_url: url })
+        .select().single();
+      if (data) setGalleryImages(prev => [data, ...prev]);
+    }
+    setUploadingImage(false);
+  };
+
+  const deleteGalleryImage = async (img) => {
+    if (!supabase) return;
+    await removeImageFromStorage(img.image_url);
+    await supabase.from('campaign_images').delete().eq('id', img.id);
+    setGalleryImages(prev => prev.filter(g => g.id !== img.id));
+    // If linked to an NPC, clear that NPC's image_url
+    const linkedNpc = npcs.find(n => n.image_url === img.image_url);
+    if (linkedNpc) {
+      const { data } = await supabase.from('npcs').update({ image_url: null }).eq('id', linkedNpc.id).select().single();
+      if (data) setNpcs(prev => prev.map(n => n.id === data.id ? data : n));
+    }
+  };
+
+  const updateGalleryCaption = async (imgId) => {
+    if (!supabase) return;
+    const { data } = await supabase.from('campaign_images')
+      .update({ caption: captionText.trim() || null })
+      .eq('id', imgId).select().single();
+    if (data) setGalleryImages(prev => prev.map(g => g.id === data.id ? data : g));
+    setEditingCaption(null);
+  };
+
+  const updateGalleryTag = async (imgId, tag) => {
+    if (!supabase) return;
+    const { data } = await supabase.from('campaign_images')
+      .update({ tag })
+      .eq('id', imgId).select().single();
+    if (data) setGalleryImages(prev => prev.map(g => g.id === data.id ? data : g));
+  };
+
+  const linkGalleryImageToNpc = async (imgId, npcId) => {
+    if (!supabase) return;
+    const img = galleryImages.find(g => g.id === imgId);
+    if (!img) return;
+    // Set the NPC's image_url
+    const { data } = await supabase.from('npcs').update({ image_url: img.image_url }).eq('id', npcId).select().single();
+    if (data) setNpcs(prev => prev.map(n => n.id === data.id ? data : n));
+    // Tag as portrait if not already
+    if (img.tag !== 'portrait') await updateGalleryTag(imgId, 'portrait');
+    setLinkingNpcImageId(null);
   };
 
   // ─── Start a new session ─────────────────────────────────────
@@ -1585,41 +1736,74 @@ export default function SessionView() {
           <div className="space-y-2 max-h-64 overflow-y-auto">
             {npcs.map(npc => (
               <Card key={npc.id}>
-                <div className="flex items-center justify-between">
-                  <span className="font-cinzel text-sm text-domain-text">{npc.name}</span>
-                  <div className="flex items-center gap-2">
-                    <select
-                      value={npc.status || 'alive'}
-                      onChange={async (e) => {
-                        const newStatus = e.target.value;
-                        setNpcs(prev => prev.map(n => n.id === npc.id ? { ...n, status: newStatus } : n));
-                        if (supabase) {
-                          const { error } = await supabase.from('npcs').update({ status: newStatus }).eq('id', npc.id);
-                          if (error) console.error('NPC status update failed:', error.message);
-                        }
-                      }}
-                      className={`text-xs font-ui bg-transparent border-none outline-none cursor-pointer ${STATUS_COLORS[npc.status] || 'text-gray-400'}`}
-                    >
-                      <option value="alive" className="bg-domain-dark text-green-400">alive</option>
-                      <option value="dead" className="bg-domain-dark text-red-400">dead</option>
-                      <option value="missing" className="bg-domain-dark text-yellow-400">missing</option>
-                      <option value="unknown" className="bg-domain-dark text-gray-400">unknown</option>
-                    </select>
-                    <button onClick={() => openEditNpc(npc)} className="text-domain-text-dim/40 hover:text-domain-amber cursor-pointer">
-                      <Pencil className="w-3 h-3" />
-                    </button>
-                    <button
-                      onClick={async () => {
-                        if (!supabase) return;
-                        const { error } = await supabase.from('npcs').delete().eq('id', npc.id);
-                        if (!error) setNpcs(prev => prev.filter(n => n.id !== npc.id));
-                      }}
-                      className="text-domain-text-dim/40 hover:text-red-400 cursor-pointer"
-                    >
-                      <Trash2 className="w-3 h-3" />
-                    </button>
+                <div className="flex items-start gap-2.5">
+                  {/* NPC Portrait */}
+                  <div className="relative group shrink-0">
+                    {npc.image_url ? (
+                      <div className="relative">
+                        <img
+                          src={npc.image_url}
+                          alt={npc.name}
+                          className="w-11 h-11 rounded-lg object-cover border border-domain-panel-border/40 cursor-pointer"
+                          onClick={() => setPreviewImage(npc.image_url)}
+                        />
+                        <button
+                          onClick={() => removeNpcImage(npc.id)}
+                          className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-domain-dark border border-domain-panel-border/50 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                        >
+                          <X className="w-2.5 h-2.5 text-red-400" />
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          npcImageInputRef.current?.setAttribute('data-npc-id', npc.id);
+                          npcImageInputRef.current?.click();
+                        }}
+                        disabled={uploadingNpcImage === npc.id}
+                        className="w-11 h-11 rounded-lg border border-dashed border-domain-panel-border/40 flex items-center justify-center text-domain-text-dim/30 hover:text-domain-amber/60 hover:border-domain-amber/40 transition-colors cursor-pointer disabled:opacity-40"
+                      >
+                        {uploadingNpcImage === npc.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <ImageIcon className="w-4 h-4" />}
+                      </button>
+                    )}
                   </div>
-                </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between">
+                      <span className="font-cinzel text-sm text-domain-text truncate">{npc.name}</span>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <select
+                          value={npc.status || 'alive'}
+                          onChange={async (e) => {
+                            const newStatus = e.target.value;
+                            setNpcs(prev => prev.map(n => n.id === npc.id ? { ...n, status: newStatus } : n));
+                            if (supabase) {
+                              const { error } = await supabase.from('npcs').update({ status: newStatus }).eq('id', npc.id);
+                              if (error) console.error('NPC status update failed:', error.message);
+                            }
+                          }}
+                          className={`text-xs font-ui bg-transparent border-none outline-none cursor-pointer ${STATUS_COLORS[npc.status] || 'text-gray-400'}`}
+                        >
+                          <option value="alive" className="bg-domain-dark text-green-400">alive</option>
+                          <option value="dead" className="bg-domain-dark text-red-400">dead</option>
+                          <option value="missing" className="bg-domain-dark text-yellow-400">missing</option>
+                          <option value="unknown" className="bg-domain-dark text-gray-400">unknown</option>
+                        </select>
+                        <button onClick={() => openEditNpc(npc)} className="text-domain-text-dim/40 hover:text-domain-amber cursor-pointer">
+                          <Pencil className="w-3 h-3" />
+                        </button>
+                        <button
+                          onClick={async () => {
+                            if (!supabase) return;
+                            if (npc.image_url) await removeNpcImage(npc.id);
+                            const { error } = await supabase.from('npcs').delete().eq('id', npc.id);
+                            if (!error) setNpcs(prev => prev.filter(n => n.id !== npc.id));
+                          }}
+                          className="text-domain-text-dim/40 hover:text-red-400 cursor-pointer"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      </div>
+                    </div>
                 {npc.role && <p className="text-xs font-crimson text-domain-parchment-dark mt-0.5">{npc.role}</p>}
                 {npc.location && (
                   <p className="text-xs font-crimson text-domain-text-dim mt-0.5 flex items-center gap-1">
@@ -1631,6 +1815,8 @@ export default function SessionView() {
                 {npc.personality && <p className="text-xs font-crimson text-domain-text-dim/70 mt-1 italic line-clamp-2">{npc.personality}</p>}
                 {npc.quirks && <p className="text-xs font-crimson text-domain-text-dim/60 mt-0.5">Quirk: {npc.quirks}</p>}
                 {npc.voice_notes && <p className="text-xs font-crimson text-domain-text-dim/60 mt-0.5">Voice: {npc.voice_notes}</p>}
+                  </div>{/* close flex-1 */}
+                </div>{/* close flex row */}
               </Card>
             ))}
           </div>
@@ -1991,6 +2177,113 @@ export default function SessionView() {
                   <p className="text-xs font-crimson text-domain-text-dim/60 mt-0.5 italic line-clamp-1">{entry.notes}</p>
                 )}
               </Card>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Campaign Gallery */}
+      <div>
+        <SectionHeader icon={ImageIcon} title="Gallery">
+          <button
+            onClick={() => galleryInputRef.current?.click()}
+            disabled={uploadingImage}
+            className="p-1 text-domain-amber border border-domain-panel-border/50 rounded hover:border-eg4h-gold-dark/60 transition-colors cursor-pointer disabled:opacity-40"
+            title="Upload Image"
+          >
+            {uploadingImage ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}
+          </button>
+        </SectionHeader>
+
+        {galleryImages.length === 0 ? (
+          <p className="text-xs font-crimson text-domain-text-dim/50 italic">No images yet. Upload maps, handouts, portraits, and props.</p>
+        ) : (
+          <div className="grid grid-cols-3 gap-2">
+            {galleryImages.map(img => (
+              <div key={img.id} className="group relative">
+                <img
+                  src={img.image_url}
+                  alt={img.caption || 'Campaign image'}
+                  className="w-full aspect-square object-cover rounded-lg border border-domain-panel-border/40 cursor-pointer hover:border-domain-amber/40 transition-colors"
+                  onClick={() => setPreviewImage(img.image_url)}
+                />
+                {/* Tag badge */}
+                {img.tag && (
+                  <span className="absolute top-1 left-1 px-1 py-0.5 text-[8px] font-ui bg-domain-dark/80 text-domain-text-dim rounded">
+                    {img.tag}
+                  </span>
+                )}
+                {/* Hover controls */}
+                <div className="absolute top-1 right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button
+                    onClick={() => deleteGalleryImage(img)}
+                    className="w-5 h-5 bg-domain-dark/80 border border-domain-panel-border/50 rounded flex items-center justify-center text-red-400/70 hover:text-red-400 cursor-pointer"
+                    title="Delete"
+                  >
+                    <Trash2 className="w-2.5 h-2.5" />
+                  </button>
+                </div>
+                {/* Caption + tag editor */}
+                <div className="mt-1">
+                  {editingCaption === img.id ? (
+                    <div className="flex gap-1">
+                      <input
+                        type="text"
+                        value={captionText}
+                        onChange={e => setCaptionText(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') updateGalleryCaption(img.id); if (e.key === 'Escape') setEditingCaption(null); }}
+                        placeholder="Caption..."
+                        className="flex-1 min-w-0 px-1.5 py-0.5 bg-[rgba(15,12,8,0.50)] border border-domain-panel-border/30 rounded text-[10px] text-domain-text placeholder-domain-text-dim/60 focus:border-eg4h-gold-dark focus:outline-none font-crimson"
+                        autoFocus
+                      />
+                      <button onClick={() => updateGalleryCaption(img.id)} className="text-green-400/70 hover:text-green-400 cursor-pointer"><Check className="w-3 h-3" /></button>
+                      <button onClick={() => setEditingCaption(null)} className="text-domain-text-dim/40 hover:text-domain-text cursor-pointer"><X className="w-3 h-3" /></button>
+                    </div>
+                  ) : (
+                    <p
+                      onClick={() => { setEditingCaption(img.id); setCaptionText(img.caption || ''); }}
+                      className="text-[10px] font-crimson text-domain-text-dim/60 truncate cursor-pointer hover:text-domain-text-dim"
+                      title="Click to edit caption"
+                    >
+                      {img.caption || 'Add caption...'}
+                    </p>
+                  )}
+                  <div className="flex items-center gap-1 mt-0.5">
+                    <select
+                      value={img.tag || ''}
+                      onChange={e => updateGalleryTag(img.id, e.target.value || null)}
+                      className="text-[9px] font-ui bg-transparent border-none outline-none text-domain-text-dim/50 cursor-pointer"
+                    >
+                      <option value="">no tag</option>
+                      <option value="portrait">portrait</option>
+                      <option value="map">map</option>
+                      <option value="handout">handout</option>
+                      <option value="prop">prop</option>
+                      <option value="other">other</option>
+                    </select>
+                    {/* Link to NPC */}
+                    {linkingNpcImageId === img.id ? (
+                      <select
+                        onChange={e => { if (e.target.value) linkGalleryImageToNpc(img.id, e.target.value); }}
+                        className="text-[9px] font-ui bg-domain-dark border border-domain-panel-border/30 rounded px-1 text-domain-text-dim cursor-pointer"
+                        autoFocus
+                        onBlur={() => setLinkingNpcImageId(null)}
+                      >
+                        <option value="">Select NPC...</option>
+                        {npcs.map(n => <option key={n.id} value={n.id}>{n.name}</option>)}
+                      </select>
+                    ) : (
+                      <button
+                        onClick={() => setLinkingNpcImageId(img.id)}
+                        className="text-[9px] font-ui text-domain-text-dim/30 hover:text-domain-amber/60 cursor-pointer"
+                        title="Link to NPC"
+                      >
+                        <Link2 className="w-2.5 h-2.5 inline" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
             ))}
           </div>
         )}
@@ -2603,6 +2896,60 @@ export default function SessionView() {
           {activeTab === 'right' && RightPanel}
         </div>
       </div>
+
+      {/* Hidden file inputs */}
+      <input
+        ref={npcImageInputRef}
+        type="file"
+        accept={ACCEPTED_IMAGE_TYPES}
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          const npcId = e.target.getAttribute('data-npc-id');
+          if (file && npcId) handleNpcImageUpload(npcId, file);
+          e.target.value = '';
+        }}
+      />
+      <input
+        ref={galleryInputRef}
+        type="file"
+        accept={ACCEPTED_IMAGE_TYPES}
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) handleGalleryUpload(file);
+          e.target.value = '';
+        }}
+      />
+
+      {/* Image preview modal */}
+      <AnimatePresence>
+        {previewImage && (
+          <motion.div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm px-4"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setPreviewImage(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="relative max-w-2xl max-h-[80vh]"
+              onClick={e => e.stopPropagation()}
+            >
+              <img src={previewImage} alt="Preview" className="max-w-full max-h-[80vh] rounded-xl border border-domain-panel-border/40 object-contain" />
+              <button
+                onClick={() => setPreviewImage(null)}
+                className="absolute -top-3 -right-3 w-7 h-7 bg-domain-dark border border-domain-panel-border/50 rounded-full flex items-center justify-center text-domain-text-dim hover:text-white transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {showUpgrade && (
         <UpgradeModal

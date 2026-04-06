@@ -84,7 +84,7 @@ async function fetchCampaignContext(supabase, campaignId) {
   ctx.dmEmail = campaign.dm_email;
 
   // Fetch all context sources in parallel
-  const [partyRes, manualRes, npcsRes, threadsRes, sessionsRes, loreRes, notesRes] = await Promise.all([
+  const [partyRes, manualRes, npcsRes, threadsRes, sessionsRes, loreRes, notesRes, imagesRes] = await Promise.all([
     // 1. Party members (from CE)
     campaign.party_id
       ? supabase.from('party_members').select('character_id, user_email, role').eq('party_id', campaign.party_id)
@@ -107,6 +107,9 @@ async function fetchCampaignContext(supabase, campaignId) {
     // 6. DM secret notes
     supabase.from('dm_character_notes').select('character_id, notes')
       .eq('campaign_id', campaignId).eq('dm_email', campaign.dm_email),
+    // 7. Visual assets (gallery images with captions)
+    supabase.from('campaign_images').select('caption, tag')
+      .eq('campaign_id', campaignId).not('caption', 'is', null).limit(20),
   ]);
 
   // Parse party members with character data
@@ -190,6 +193,11 @@ async function fetchCampaignContext(supabase, campaignId) {
     notes: truncate(n.notes, 200),
   }));
 
+  ctx.visualAssets = (imagesRes.data || []).map(i => ({
+    caption: i.caption,
+    tag: i.tag || 'other',
+  }));
+
   return ctx;
 }
 
@@ -233,6 +241,12 @@ function formatContext(ctx) {
   if (ctx.dmNotes?.length) {
     sections.push('DM SECRET NOTES:\n' + ctx.dmNotes.map(n =>
       `- [Character ${n.characterId}]: ${n.notes}`
+    ).join('\n'));
+  }
+
+  if (ctx.visualAssets?.length) {
+    sections.push('VISUAL ASSETS (maps, handouts, portraits the DM has uploaded — reference these when relevant):\n' + ctx.visualAssets.map(a =>
+      `- ${a.caption} (${a.tag})`
     ).join('\n'));
   }
 
