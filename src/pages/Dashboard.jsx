@@ -268,16 +268,23 @@ export default function Dashboard() {
 
               <label className="block mb-6">
                 <span className="text-domain-text-dim text-sm font-ui mb-1 block">Link Party (from Character Evolver)</span>
-                <select
-                  value={selectedParty}
-                  onChange={e => setSelectedParty(e.target.value)}
-                  className="w-full px-4 py-2.5 bg-domain-dark border border-domain-panel-border/50 rounded-lg text-domain-text focus:border-eg4h-gold-dark focus:outline-none font-crimson"
-                >
-                  <option value="">No party linked</option>
-                  {parties.map(p => (
-                    <option key={p.id} value={p.id}>{p.name}</option>
-                  ))}
-                </select>
+                {parties.length > 0 ? (
+                  <select
+                    value={selectedParty}
+                    onChange={e => setSelectedParty(e.target.value)}
+                    className="w-full px-4 py-2.5 bg-domain-dark border border-domain-panel-border/50 rounded-lg text-domain-text focus:border-eg4h-gold-dark focus:outline-none font-crimson"
+                  >
+                    <option value="">No party linked</option>
+                    {parties.map(p => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <div className="w-full px-4 py-2.5 bg-domain-dark border border-domain-panel-border/50 rounded-lg">
+                    <p className="text-domain-text-dim/60 font-crimson text-sm">No parties found yet</p>
+                  </div>
+                )}
+                <span className="text-domain-text-dim/50 text-xs font-ui mt-1.5 block">You can link a party later from your campaign settings</span>
               </label>
 
               <div className="flex gap-3 justify-end">

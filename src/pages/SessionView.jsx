@@ -5,7 +5,7 @@ import {
   ArrowLeft, Loader2, Plus, Trash2, Swords, BookOpen, Users,
   Scroll, Sparkles, Globe, ChevronUp, ChevronDown, Shield,
   Heart, Eye, X, GripVertical, Pencil, Save, Lock, EyeOff, Dices,
-  ChevronRight, BookMarked, MapPin, Clock, Mail, MailOpen, Check, Zap, RotateCcw, Layers,
+  ChevronRight, BookMarked, MapPin, Clock, Mail, MailOpen, Check, Zap, RotateCcw, Layers, Link2,
 } from 'lucide-react';
 import { useAuth } from '@/api/AuthContext';
 import { supabase } from '@/lib/supabase';
@@ -272,6 +272,12 @@ export default function SessionView() {
   const [sendingMsg, setSendingMsg] = useState(false);
   const [dmMessages, setDmMessages] = useState({});
 
+  // Party linking state
+  const [availableParties, setAvailableParties] = useState([]);
+  const [showPartyLink, setShowPartyLink] = useState(false);
+  const [selectedPartyId, setSelectedPartyId] = useState('');
+  const [linkingParty, setLinkingParty] = useState(false);
+
   const [combatants, setCombatants] = useState([]);
   const [combatRound, setCombatRound] = useState(0);
   const [newCombatant, setNewCombatant] = useState({ name: '', init: '', hp: '' });
@@ -406,6 +412,68 @@ export default function SessionView() {
 
     load();
   }, [user?.email, campaignId]);
+
+  // ─── Link a party to this campaign ──────────────────────────
+  const fetchAvailableParties = async () => {
+    if (!user?.email || !supabase) return;
+    const { data } = await supabase
+      .from('parties')
+      .select('*')
+      .eq('dm_email', user.email);
+    setAvailableParties(data || []);
+  };
+
+  const handleLinkParty = async () => {
+    if (!selectedPartyId || !supabase || linkingParty) return;
+    setLinkingParty(true);
+
+    const { error } = await supabase
+      .from('campaigns')
+      .update({ party_id: selectedPartyId })
+      .eq('id', campaignId);
+
+    if (!error) {
+      // Re-fetch campaign + party data
+      setCampaign(prev => ({ ...prev, party_id: selectedPartyId }));
+      setShowPartyLink(false);
+      setSelectedPartyId('');
+
+      // Fetch party members
+      const { data: members } = await supabase
+        .from('party_members')
+        .select('*')
+        .eq('party_id', selectedPartyId);
+
+      if (members?.length) {
+        const dmEmail = (campaign?.dm_email || user.email || '').toLowerCase();
+        const players = members.filter(m =>
+          m.role !== 'dm' &&
+          m.character_id &&
+          (!(m.user_email || m.email) || (m.user_email || m.email || '').toLowerCase() !== dmEmail)
+        );
+        const charIds = players.map(m => m.character_id);
+
+        if (charIds.length > 0) {
+          const { data: chars } = await supabase
+            .from('characters')
+            .select('id, character_data')
+            .in('id', charIds);
+
+          const charMap = {};
+          (chars || []).forEach(c => {
+            const cd = typeof c.character_data === 'string' ? JSON.parse(c.character_data) : c.character_data;
+            charMap[c.id] = cd;
+          });
+
+          setPartyMembers(players.map(m => ({
+            ...m,
+            character: charMap[m.character_id] || null,
+          })));
+        }
+      }
+    }
+    setLinkingParty(false);
+  };
 
   // ─── Start a new session ─────────────────────────────────────
   const startNewSession = async () => {
@@ -1840,9 +1908,54 @@ export default function SessionView() {
       {/* Party Members */}
       <div>
         <SectionHeader icon={Users} title="Party" />
-        {partyMembers.length === 0 ? (
+        {partyMembers.length === 0 && !campaign?.party_id ? (
+          <div className="dm-panel-raised border rounded-lg p-4">
+            <p className="text-xs font-crimson text-domain-text-dim/60 italic mb-3">
+              No party linked to this campaign.
+            </p>
+            {showPartyLink ? (
+              <div className="space-y-2">
+                <select
+                  value={selectedPartyId}
+                  onChange={e => setSelectedPartyId(e.target.value)}
+                  className="w-full px-3 py-2 bg-domain-dark border border-domain-panel-border/50 rounded-lg text-sm text-domain-text focus:border-eg4h-gold-dark focus:outline-none font-crimson"
+                >
+                  <option value="">Select a party...</option>
+                  {availableParties.map(p => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </select>
+                {availableParties.length === 0 && (
+                  <p className="text-[10px] font-ui text-domain-text-dim/50">No parties found in Character Evolver.</p>
+                )}
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleLinkParty}
+                    disabled={!selectedPartyId || linkingParty}
+                    className="px-3 py-1.5 text-xs font-cinzel font-semibold text-eg4h-black bg-gradient-to-r from-eg4h-gold to-eg4h-gold-light rounded-lg disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                  >
+                    {linkingParty ? 'Linking...' : 'Link'}
+                  </button>
+                  <button
+                    onClick={() => { setShowPartyLink(false); setSelectedPartyId(''); }}
+                    className="px-3 py-1.5 text-xs font-ui text-domain-text-dim hover:text-domain-text transition-colors cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                onClick={() => { fetchAvailableParties(); setShowPartyLink(true); }}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-cinzel font-semibold text-eg4h-black bg-gradient-to-r from-eg4h-gold to-eg4h-gold-light rounded-lg hover:shadow-[0_2px_10px_rgba(255,215,0,0.3)] transition-all cursor-pointer"
+              >
+                <Link2 className="w-3.5 h-3.5" /> Link a Party
+              </button>
+            )}
+          </div>
+        ) : partyMembers.length === 0 ? (
           <p className="text-xs font-crimson text-domain-text-dim/50 italic">
-            {campaign?.party_id ? 'No members in this party yet.' : 'No party linked to this campaign.'}
+            No members in this party yet.
           </p>
         ) : (
           <div className="space-y-2">
