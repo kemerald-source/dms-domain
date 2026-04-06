@@ -7,7 +7,7 @@ import {
   Scroll, Sparkles, Globe, ChevronUp, ChevronDown, Shield,
   Heart, Eye, X, GripVertical, Pencil, Save, Lock, EyeOff, Dices,
   ChevronRight, BookMarked, MapPin, Clock, Mail, MailOpen, Check, Zap, RotateCcw, Layers, Link2,
-  ImageIcon, Upload, Tag,
+  ImageIcon, Upload, Tag, UserPlus, Copy, LinkIcon,
 } from 'lucide-react';
 import { useAuth } from '@/api/AuthContext';
 import { supabase } from '@/lib/supabase';
@@ -293,6 +293,13 @@ export default function SessionView() {
   const [selectedPartyId, setSelectedPartyId] = useState('');
   const [linkingParty, setLinkingParty] = useState(false);
 
+  // Invite state
+  const [inviteCode, setInviteCode] = useState(null);
+  const [showInvite, setShowInvite] = useState(false);
+  const [creatingInvite, setCreatingInvite] = useState(false);
+  const [inviteCopied, setInviteCopied] = useState(false);
+  const [campaignMembers, setCampaignMembers] = useState([]);
+
   // Manual characters state
   const [manualChars, setManualChars] = useState([]);
   const [showManualForm, setShowManualForm] = useState(false);
@@ -444,6 +451,25 @@ export default function SessionView() {
         .eq('campaign_id', campaignId)
         .order('created_at');
       setManualChars(manualData || []);
+
+      // Fetch active invite code for this campaign
+      const { data: inviteData } = await supabase
+        .from('campaign_invites')
+        .select('invite_code')
+        .eq('campaign_id', campaignId)
+        .eq('is_active', true)
+        .order('created_at', { ascending: false })
+        .limit(1);
+      if (inviteData?.[0]) setInviteCode(inviteData[0].invite_code);
+
+      // Fetch campaign members (players who joined via invite)
+      const { data: membersData } = await supabase
+        .from('campaign_members')
+        .select('*')
+        .eq('campaign_id', campaignId)
+        .eq('role', 'player')
+        .order('joined_at');
+      setCampaignMembers(membersData || []);
 
       setLoading(false);
     }
@@ -744,6 +770,60 @@ export default function SessionView() {
     // Tag as portrait if not already
     if (img.tag !== 'portrait') await updateGalleryTag(imgId, 'portrait');
     setLinkingNpcImageId(null);
+  };
+
+  // ─── Invite management ───────────────────────────────────────
+  const CE_BASE_URL = 'https://character-evolver.eg4h.net';
+
+  const generateInviteCode = async () => {
+    if (!supabase || !user?.email || creatingInvite) return;
+    setCreatingInvite(true);
+
+    // Deactivate any existing invites for this campaign
+    if (inviteCode) {
+      await supabase.from('campaign_invites').update({ is_active: false })
+        .eq('campaign_id', campaignId).eq('is_active', true);
+    }
+
+    // Generate a short random code
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
+    let code = '';
+    for (let i = 0; i < 7; i++) code += chars[Math.floor(Math.random() * chars.length)];
+
+    const { data, error } = await supabase
+      .from('campaign_invites')
+      .insert({
+        campaign_id: campaignId,
+        invite_code: code,
+        created_by: user.email,
+      })
+      .select()
+      .single();
+
+    if (!error && data) {
+      setInviteCode(data.invite_code);
+    }
+    setCreatingInvite(false);
+  };
+
+  const copyInviteLink = () => {
+    if (!inviteCode) return;
+    navigator.clipboard.writeText(`${CE_BASE_URL}/join/${inviteCode}`);
+    setInviteCopied(true);
+    setTimeout(() => setInviteCopied(false), 2000);
+  };
+
+  const deactivateInvite = async () => {
+    if (!supabase || !inviteCode) return;
+    await supabase.from('campaign_invites').update({ is_active: false })
+      .eq('campaign_id', campaignId).eq('invite_code', inviteCode);
+    setInviteCode(null);
+  };
+
+  const removeCampaignMember = async (memberId) => {
+    if (!supabase) return;
+    await supabase.from('campaign_members').delete().eq('id', memberId);
+    setCampaignMembers(prev => prev.filter(m => m.id !== memberId));
   };
 
   // ─── Start a new session ─────────────────────────────────────
@@ -2337,14 +2417,102 @@ export default function SessionView() {
       {/* Party Members */}
       <div>
         <SectionHeader icon={Users} title="Party">
-          <button
-            onClick={() => { setEditingManualChar(null); setManualForm({ name: '', class: '', level: 1, race: '', ac: '', hp: '', pp: '', notes: '' }); setShowManualForm(true); }}
-            className="p-1 text-domain-amber border border-domain-panel-border/50 rounded hover:border-eg4h-gold-dark/60 transition-colors cursor-pointer"
-            title="Add Character"
-          >
-            <Plus className="w-3 h-3" />
-          </button>
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => setShowInvite(v => !v)}
+              className={`p-1 border border-domain-panel-border/50 rounded hover:border-eg4h-gold-dark/60 transition-colors cursor-pointer ${showInvite ? 'text-eg4h-gold border-eg4h-gold-dark/40' : 'text-domain-amber'}`}
+              title="Invite Players"
+            >
+              <UserPlus className="w-3 h-3" />
+            </button>
+            <button
+              onClick={() => { setEditingManualChar(null); setManualForm({ name: '', class: '', level: 1, race: '', ac: '', hp: '', pp: '', notes: '' }); setShowManualForm(true); }}
+              className="p-1 text-domain-amber border border-domain-panel-border/50 rounded hover:border-eg4h-gold-dark/60 transition-colors cursor-pointer"
+              title="Add Character"
+            >
+              <Plus className="w-3 h-3" />
+            </button>
+          </div>
         </SectionHeader>
+
+        {/* Invite Players Panel */}
+        <AnimatePresence>
+          {showInvite && (
+            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
+              <Card className="mb-3 !bg-domain-panel-raised">
+                <div className="flex items-center gap-1.5 mb-2">
+                  <LinkIcon className="w-3 h-3 text-eg4h-gold/70" />
+                  <span className="text-[10px] font-ui text-eg4h-gold/70">Invite Link</span>
+                </div>
+                {inviteCode ? (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        readOnly
+                        value={`${CE_BASE_URL}/join/${inviteCode}`}
+                        className="flex-1 min-w-0 px-2 py-1.5 bg-[rgba(15,12,8,0.50)] border border-domain-panel-border/30 rounded text-[10px] text-domain-text font-mono focus:outline-none"
+                        onClick={e => e.target.select()}
+                      />
+                      <button
+                        onClick={copyInviteLink}
+                        className={`shrink-0 px-2.5 py-1.5 text-[10px] font-cinzel font-semibold rounded transition-all cursor-pointer ${inviteCopied ? 'text-green-400 border border-green-700/40' : 'text-eg4h-black bg-gradient-to-r from-eg4h-gold to-eg4h-gold-light'}`}
+                      >
+                        {inviteCopied ? <><Check className="w-3 h-3 inline mr-0.5" /> Copied</> : <><Copy className="w-3 h-3 inline mr-0.5" /> Copy</>}
+                      </button>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={generateInviteCode}
+                        disabled={creatingInvite}
+                        className="text-[9px] font-ui text-domain-text-dim/50 hover:text-domain-amber cursor-pointer"
+                      >
+                        Regenerate
+                      </button>
+                      <button
+                        onClick={deactivateInvite}
+                        className="text-[9px] font-ui text-domain-text-dim/50 hover:text-red-400 cursor-pointer"
+                      >
+                        Deactivate
+                      </button>
+                    </div>
+                    <p className="text-[9px] font-ui text-domain-text-dim/40">Share this link with players. They'll pick a character on CE and join your campaign.</p>
+                  </div>
+                ) : (
+                  <button
+                    onClick={generateInviteCode}
+                    disabled={creatingInvite}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-cinzel font-semibold text-eg4h-black bg-gradient-to-r from-eg4h-gold to-eg4h-gold-light rounded-lg hover:shadow-[0_2px_10px_rgba(255,215,0,0.3)] transition-all cursor-pointer disabled:opacity-40"
+                  >
+                    {creatingInvite ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <LinkIcon className="w-3.5 h-3.5" />}
+                    Generate Invite Link
+                  </button>
+                )}
+
+                {/* Joined members */}
+                {campaignMembers.length > 0 && (
+                  <div className="mt-3 pt-2 border-t border-domain-panel-border/20">
+                    <p className="text-[10px] font-ui text-domain-text-dim/50 mb-1.5">{campaignMembers.length} player{campaignMembers.length !== 1 ? 's' : ''} joined</p>
+                    <div className="space-y-1">
+                      {campaignMembers.map(m => (
+                        <div key={m.id} className="flex items-center justify-between">
+                          <span className="text-[10px] font-ui text-domain-text-dim truncate">{m.user_email}</span>
+                          <button
+                            onClick={() => removeCampaignMember(m.id)}
+                            className="text-domain-text-dim/30 hover:text-red-400 cursor-pointer shrink-0"
+                            title="Remove player"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </Card>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Manual Character Form */}
         {showManualForm && (
