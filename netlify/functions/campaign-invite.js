@@ -24,7 +24,8 @@ function respond(statusCode, body) {
 }
 
 export async function handler(event) {
-  if (event.httpMethod === 'OPTIONS') return { statusCode: 204, headers: corsHeaders };
+  // CORS preflight — must return 200 with headers for cross-origin POST
+  if (event.httpMethod === 'OPTIONS') return { statusCode: 200, headers: corsHeaders, body: '' };
 
   const supabase = getSupabase();
   if (!supabase) return respond(500, { error: 'Database not configured' });
@@ -40,7 +41,10 @@ export async function handler(event) {
       .eq('invite_code', code)
       .single();
 
-    if (error || !invite) return respond(404, { error: 'Invalid invite link. Check with your DM.' });
+    if (error || !invite) {
+      console.log('Invite lookup failed:', error?.message, 'code:', code);
+      return respond(404, { error: 'Invalid invite link. Check with your DM.' });
+    }
     if (!invite.is_active) return respond(410, { error: 'This invite link has been deactivated.' });
     if (invite.expires_at && new Date(invite.expires_at) < new Date()) {
       return respond(410, { error: 'This invite link has expired. Ask your DM for a new one.' });
@@ -76,6 +80,8 @@ export async function handler(event) {
     const { code, email, characterId } = body;
     if (!code || !email) return respond(400, { error: 'code and email are required' });
 
+    console.log('Join attempt:', { code, email, characterId: characterId || 'none' });
+
     // Validate invite
     const { data: invite, error: invErr } = await supabase
       .from('campaign_invites')
@@ -83,7 +89,10 @@ export async function handler(event) {
       .eq('invite_code', code)
       .single();
 
-    if (invErr || !invite) return respond(404, { error: 'Invalid invite link.' });
+    if (invErr || !invite) {
+      console.log('Invite validation failed:', invErr?.message);
+      return respond(404, { error: 'Invalid invite link.' });
+    }
     if (!invite.is_active) return respond(410, { error: 'This invite link has been deactivated.' });
     if (invite.expires_at && new Date(invite.expires_at) < new Date()) {
       return respond(410, { error: 'This invite link has expired.' });
@@ -97,13 +106,13 @@ export async function handler(event) {
       return respond(400, { error: "This is your campaign! Share this link with your players." });
     }
 
-    // Check if already a member
+    // Check if already a member — use maybeSingle to avoid error when no match
     const { data: existing } = await supabase
       .from('campaign_members')
       .select('id, character_id')
       .eq('campaign_id', invite.campaign_id)
       .eq('user_email', email.toLowerCase())
-      .single();
+      .maybeSingle();
 
     if (existing) {
       return respond(409, { error: "You're already in this campaign.", member: existing });
@@ -122,9 +131,11 @@ export async function handler(event) {
       .single();
 
     if (memErr) {
-      console.error('Error creating campaign member:', memErr);
-      return respond(500, { error: 'Failed to join campaign.' });
+      console.error('Error creating campaign member:', memErr.message, memErr.details, memErr.hint);
+      return respond(500, { error: 'Failed to join campaign: ' + memErr.message });
     }
+
+    console.log('Member created:', member.id);
 
     // If character selected and campaign has a party, add to party_members
     if (characterId && invite.campaigns.party_id) {
@@ -136,7 +147,7 @@ export async function handler(event) {
           user_email: email.toLowerCase(),
           role: 'player',
         });
-      if (pmErr) console.error('Error adding to party_members:', pmErr);
+      if (pmErr) console.error('Error adding to party_members:', pmErr.message, pmErr.details);
     }
 
     // Increment use count
