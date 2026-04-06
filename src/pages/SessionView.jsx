@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -1745,11 +1746,11 @@ export default function SessionView() {
                           src={npc.image_url}
                           alt={npc.name}
                           className="w-11 h-11 rounded-lg object-cover border border-domain-panel-border/40 cursor-pointer"
-                          onClick={() => setPreviewImage(npc.image_url)}
+                          onClick={() => setPreviewImage({ url: npc.image_url, caption: npc.name })}
                         />
                         <button
                           onClick={() => removeNpcImage(npc.id)}
-                          className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-domain-dark border border-domain-panel-border/50 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                          className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-domain-dark border border-domain-panel-border/50 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer pointer-events-none group-hover:pointer-events-auto"
                         >
                           <X className="w-2.5 h-2.5 text-red-400" />
                         </button>
@@ -2205,16 +2206,16 @@ export default function SessionView() {
                   src={img.image_url}
                   alt={img.caption || 'Campaign image'}
                   className="w-full aspect-square object-cover rounded-lg border border-domain-panel-border/40 cursor-pointer hover:border-domain-amber/40 transition-colors"
-                  onClick={() => setPreviewImage(img.image_url)}
+                  onClick={() => setPreviewImage({ url: img.image_url, caption: img.caption })}
                 />
                 {/* Tag badge */}
                 {img.tag && (
-                  <span className="absolute top-1 left-1 px-1 py-0.5 text-[8px] font-ui bg-domain-dark/80 text-domain-text-dim rounded">
+                  <span className="absolute top-1 left-1 px-1 py-0.5 text-[8px] font-ui bg-domain-dark/80 text-domain-text-dim rounded pointer-events-none">
                     {img.tag}
                   </span>
                 )}
                 {/* Hover controls */}
-                <div className="absolute top-1 right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="absolute top-1 right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none group-hover:pointer-events-auto">
                   <button
                     onClick={() => deleteGalleryImage(img)}
                     className="w-5 h-5 bg-domain-dark/80 border border-domain-panel-border/50 rounded flex items-center justify-center text-red-400/70 hover:text-red-400 cursor-pointer"
@@ -2922,34 +2923,31 @@ export default function SessionView() {
         }}
       />
 
-      {/* Image preview modal */}
-      <AnimatePresence>
-        {previewImage && (
-          <motion.div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm px-4"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={() => setPreviewImage(null)}
+      {/* Image preview modal — portaled to document.body to escape any stacking context */}
+      {previewImage && createPortal(
+        <div
+          className="fixed inset-0 flex items-center justify-center bg-black/85 backdrop-blur-sm px-4"
+          style={{ zIndex: 9999 }}
+          onClick={() => setPreviewImage(null)}
+        >
+          <div
+            className="relative max-w-2xl max-h-[80vh]"
+            onClick={e => e.stopPropagation()}
           >
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              className="relative max-w-2xl max-h-[80vh]"
-              onClick={e => e.stopPropagation()}
+            <img src={previewImage.url} alt={previewImage.caption || 'Preview'} className="max-w-full max-h-[80vh] rounded-xl border border-domain-panel-border/40 object-contain" />
+            {previewImage.caption && (
+              <p className="text-center text-sm font-crimson text-domain-text-dim mt-2">{previewImage.caption}</p>
+            )}
+            <button
+              onClick={() => setPreviewImage(null)}
+              className="absolute -top-3 -right-3 w-8 h-8 bg-domain-dark border border-domain-panel-border/50 rounded-full flex items-center justify-center text-domain-text-dim hover:text-white transition-colors cursor-pointer shadow-lg"
             >
-              <img src={previewImage} alt="Preview" className="max-w-full max-h-[80vh] rounded-xl border border-domain-panel-border/40 object-contain" />
-              <button
-                onClick={() => setPreviewImage(null)}
-                className="absolute -top-3 -right-3 w-7 h-7 bg-domain-dark border border-domain-panel-border/50 rounded-full flex items-center justify-center text-domain-text-dim hover:text-white transition-colors cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>,
+        document.body
+      )}
 
       {showUpgrade && (
         <UpgradeModal
