@@ -62,28 +62,73 @@ function buildUserMessage(type, prompt, context) {
   return msg;
 }
 
+// ─── Tier verification ─────────────────────────────────────────
+const ADMIN_EMAILS = ['kcolburn@eg4h.net', 'centersfocus@gmail.com'];
+const DMD_PRODUCT_ID = 'prod_UH5JJZwg8AdVaI';
+const BUNDLE_PRODUCT_ID = 'prod_UH5KKwFpmJ46aw';
+
+async function verifyPaidTier(email) {
+  if (!email) return false;
+  if (ADMIN_EMAILS.includes(email.toLowerCase())) return true;
+  const stripeKey = process.env.STRIPE_SECRET_KEY;
+  if (!stripeKey) return false;
+  try {
+    const custRes = await fetch(`https://api.stripe.com/v1/customers/search?query=email:'${encodeURIComponent(email)}'`, {
+      headers: { Authorization: `Bearer ${stripeKey}` },
+    });
+    const custData = await custRes.json();
+    if (!custData.data?.length) return false;
+    for (const customer of custData.data) {
+      const subRes = await fetch(`https://api.stripe.com/v1/subscriptions?customer=${customer.id}&status=active&limit=10`, {
+        headers: { Authorization: `Bearer ${stripeKey}` },
+      });
+      const subData = await subRes.json();
+      for (const sub of (subData.data || [])) {
+        for (const item of (sub.items?.data || [])) {
+          const prodId = item.price?.product;
+          if (prodId === DMD_PRODUCT_ID || prodId === BUNDLE_PRODUCT_ID) return true;
+        }
+      }
+    }
+  } catch (e) { console.error('Stripe tier check error:', e); }
+  return false;
+}
+
+// AI-gated types that require paid tier
+const PAID_TYPES = ['summary', 'improv'];
+
 export async function handler(event) {
+  const corsHeaders = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'Content-Type', 'Access-Control-Allow-Methods': 'POST' };
+
   if (event.httpMethod === 'OPTIONS') {
-    return { statusCode: 204, headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'Content-Type', 'Access-Control-Allow-Methods': 'POST' } };
+    return { statusCode: 204, headers: corsHeaders };
   }
 
   if (event.httpMethod !== 'POST') {
-    return { statusCode: 405, body: JSON.stringify({ error: 'Method not allowed' }) };
+    return { statusCode: 405, headers: corsHeaders, body: JSON.stringify({ error: 'Method not allowed' }) };
   }
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
-    return { statusCode: 500, body: JSON.stringify({ error: 'ANTHROPIC_API_KEY not configured' }) };
+    return { statusCode: 500, headers: corsHeaders, body: JSON.stringify({ error: 'ANTHROPIC_API_KEY not configured' }) };
   }
 
   let body;
   try {
     body = JSON.parse(event.body);
   } catch {
-    return { statusCode: 400, body: JSON.stringify({ error: 'Invalid JSON body' }) };
+    return { statusCode: 400, headers: corsHeaders, body: JSON.stringify({ error: 'Invalid JSON body' }) };
   }
 
-  const { type, prompt, context } = body;
+  const { type, prompt, context, userEmail } = body;
+
+  // Tier gate for AI-powered features
+  if (PAID_TYPES.includes(type) && userEmail) {
+    const isPaid = await verifyPaidTier(userEmail);
+    if (!isPaid) {
+      return { statusCode: 403, headers: corsHeaders, body: JSON.stringify({ error: `AI ${type} requires a DM tier subscription.` }) };
+    }
+  }
 
   if (!type || !SYSTEM_PROMPTS[type]) {
     return { statusCode: 400, body: JSON.stringify({ error: 'Invalid type. Must be: npc, improv, or summary' }) };

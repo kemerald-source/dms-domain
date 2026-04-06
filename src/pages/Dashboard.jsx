@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Plus, Calendar, Users, Scroll, LogOut, Loader2, Swords, Pencil, Check, X, Crown } from 'lucide-react';
+import { Plus, Calendar, Users, Scroll, LogOut, Loader2, Swords, Pencil, Check, X, Crown, Sparkles } from 'lucide-react';
 import { useAuth } from '@/api/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { useTier, FREE_LIMITS } from '@/lib/tier';
@@ -45,6 +45,16 @@ export default function Dashboard() {
       login(() => navigate('/dashboard'));
     }
   }, [authLoading, isAuthenticated]);
+
+  // Clear tier cache after Stripe checkout so tier refreshes immediately
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('checkout') === 'success' && user?.email) {
+      sessionStorage.removeItem(`dmd-tier-${user.email.toLowerCase()}`);
+      // Clean up URL
+      window.history.replaceState({}, '', '/dashboard');
+    }
+  }, [user?.email]);
 
   // Fetch campaigns and parties
   useEffect(() => {
@@ -240,6 +250,24 @@ export default function Dashboard() {
             Create Campaign
           </button>
         </div>
+
+        {/* Free tier upgrade prompt */}
+        {!isDM && !loading && campaigns.length > 0 && (
+          <div className="mb-6 px-4 py-3 bg-domain-panel border border-eg4h-gold-dark/20 rounded-lg flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3 min-w-0">
+              <Sparkles className="w-4 h-4 text-eg4h-gold/70 shrink-0" />
+              <p className="text-sm font-crimson text-domain-text-dim">
+                Unlock AI-powered tools, unlimited campaigns, and more with <span className="text-eg4h-gold">DM tier</span>.
+              </p>
+            </div>
+            <button
+              onClick={() => { setUpgradeReason(''); setShowUpgrade(true); }}
+              className="shrink-0 px-4 py-1.5 font-cinzel text-xs font-semibold text-eg4h-black bg-gradient-to-r from-eg4h-gold to-eg4h-gold-light rounded-lg hover:shadow-[0_2px_10px_rgba(255,215,0,0.3)] transition-all cursor-pointer"
+            >
+              Upgrade
+            </button>
+          </div>
+        )}
 
         {/* Create Campaign Modal */}
         {showCreate && (

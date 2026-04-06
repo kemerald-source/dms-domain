@@ -8,7 +8,8 @@ export const FREE_LIMITS = {
   campaigns: 1,
   npcs: 5,
   threads: 5,
-  lore: 10,
+  lore: 5,
+  gallery: 5,
 };
 
 // ─── Stripe price IDs (for checkout links) ───────────────────

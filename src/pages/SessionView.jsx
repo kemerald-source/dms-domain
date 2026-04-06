@@ -688,6 +688,11 @@ export default function SessionView() {
   // ─── Gallery CRUD ───────────────────────────────────────────
   const handleGalleryUpload = async (file) => {
     if (!file || !supabase) return;
+    if (!isDM && galleryImages.length >= FREE_LIMITS.gallery) {
+      setUpgradeReason(`Free tier allows ${FREE_LIMITS.gallery} gallery images per campaign. Upgrade for unlimited images.`);
+      setShowUpgrade(true);
+      return;
+    }
     setUploadingImage(true);
     const url = await uploadImageToStorage(file);
     if (url) {
@@ -2186,7 +2191,7 @@ export default function SessionView() {
 
       {/* Campaign Gallery */}
       <div>
-        <SectionHeader icon={ImageIcon} title="Gallery">
+        <SectionHeader icon={ImageIcon} title={`Gallery${!isDM ? ` (${galleryImages.length}/${FREE_LIMITS.gallery})` : ''}`}>
           <button
             onClick={() => galleryInputRef.current?.click()}
             disabled={uploadingImage}
