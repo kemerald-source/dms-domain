@@ -378,6 +378,7 @@ export default function SessionView() {
       setSrdRef(grouped);
 
       // Party members with character data — exclude DM entries and DM email
+      let ceCharIds = new Set();
       if (camp.party_id) {
         const { data: members } = await supabase
           .from('party_members')
@@ -407,10 +408,12 @@ export default function SessionView() {
               charMap[c.id] = cd;
             });
 
-            setPartyMembers(players.map(m => ({
+            const cePartyMembers = players.map(m => ({
               ...m,
               character: charMap[m.character_id] || null,
-            })));
+            }));
+            setPartyMembers(cePartyMembers);
+            ceCharIds = new Set(cePartyMembers.map(p => p.character_id));
 
             // Fetch DM secret notes and messages for these characters
             const [notesRes, msgsRes] = await Promise.all([
@@ -470,6 +473,33 @@ export default function SessionView() {
         .eq('role', 'player')
         .order('joined_at');
       setCampaignMembers(membersData || []);
+
+      // Enrich campaign members with character data and merge into partyMembers
+      const inviteMembers = (membersData || []).filter(m => m.character_id);
+      // Exclude any that are already in partyMembers (from the CE party link)
+      const newInviteMembers = inviteMembers.filter(m => !ceCharIds.has(m.character_id));
+
+      if (newInviteMembers.length > 0) {
+        const inviteCharIds = newInviteMembers.map(m => m.character_id);
+        const { data: inviteChars } = await supabase
+          .from('characters')
+          .select('id, character_data')
+          .in('id', inviteCharIds);
+
+        const inviteCharMap = {};
+        (inviteChars || []).forEach(c => {
+          const cd = typeof c.character_data === 'string' ? JSON.parse(c.character_data) : c.character_data;
+          inviteCharMap[c.id] = cd;
+        });
+
+        const enrichedInviteMembers = newInviteMembers.map(m => ({
+          ...m,
+          character: inviteCharMap[m.character_id] || null,
+          _source: 'invite',
+        }));
+
+        setPartyMembers(prev => [...prev, ...enrichedInviteMembers]);
+      }
 
       setLoading(false);
     }
