@@ -2668,6 +2668,20 @@ export default function SessionView() {
                       >
                         <EyeOff className="w-3.5 h-3.5" />
                       </button>
+                      {m._source === 'invite' && (
+                        <button
+                          onClick={async () => {
+                            if (!confirm(`Remove ${stats.name} from this campaign?`)) return;
+                            const member = campaignMembers.find(cm => cm.character_id === m.character_id);
+                            if (member) await removeCampaignMember(member.id);
+                            setPartyMembers(prev => prev.filter(p => !(p._source === 'invite' && p.character_id === m.character_id)));
+                          }}
+                          className="p-0.5 rounded text-domain-text-dim/40 hover:text-red-400 transition-colors cursor-pointer"
+                          title="Remove from campaign"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                     </div>
                   </div>
                   <div className="flex gap-4 mt-1.5 text-xs font-ui text-domain-text-dim">
