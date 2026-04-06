@@ -1443,7 +1443,8 @@ export default function SessionView() {
               {activeNote.created_at && (
                 <span className="text-[10px] font-ui text-domain-text-dim/50 flex items-center gap-1">
                   <Clock className="w-2.5 h-2.5" />
-                  {new Date(activeNote.created_at).toLocaleDateString()}
+                  {new Date(activeNote.created_at).toLocaleDateString()}{' '}
+                  {new Date(activeNote.created_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
                 </span>
               )}
             </div>

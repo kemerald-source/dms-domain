@@ -7,6 +7,20 @@ import { supabase } from '@/lib/supabase';
 import { useTier, FREE_LIMITS } from '@/lib/tier';
 import UpgradeModal from '@/components/UpgradeModal';
 
+function relativeTime(date) {
+  const now = Date.now();
+  const diff = now - date.getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'Just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days}d ago`;
+  const months = Math.floor(days / 30);
+  return `${months}mo ago`;
+}
+
 export default function Dashboard() {
   const { user, isAuthenticated, loading: authLoading, login, logout } = useAuth();
   const navigate = useNavigate();
@@ -401,9 +415,9 @@ export default function Dashboard() {
                         {campaign.threadCount} thread{campaign.threadCount !== 1 ? 's' : ''}
                       </span>
                       {campaign.lastPlayed && (
-                        <span className="flex items-center gap-1.5">
+                        <span className="flex items-center gap-1.5" title={campaign.lastPlayed.toLocaleDateString()}>
                           <Calendar className="w-3.5 h-3.5" />
-                          {campaign.lastPlayed.toLocaleDateString()}
+                          {relativeTime(campaign.lastPlayed)}
                         </span>
                       )}
                     </div>
