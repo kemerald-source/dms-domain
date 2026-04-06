@@ -278,6 +278,13 @@ export default function SessionView() {
   const [selectedPartyId, setSelectedPartyId] = useState('');
   const [linkingParty, setLinkingParty] = useState(false);
 
+  // Manual characters state
+  const [manualChars, setManualChars] = useState([]);
+  const [showManualForm, setShowManualForm] = useState(false);
+  const [editingManualChar, setEditingManualChar] = useState(null);
+  const [manualForm, setManualForm] = useState({ name: '', class: '', level: 1, race: '', ac: '', hp: '', pp: '', notes: '' });
+  const [savingManual, setSavingManual] = useState(false);
+
   const [combatants, setCombatants] = useState([]);
   const [combatRound, setCombatRound] = useState(0);
   const [newCombatant, setNewCombatant] = useState({ name: '', init: '', hp: '' });
@@ -407,6 +414,14 @@ export default function SessionView() {
         }
       }
 
+      // Fetch manual characters for this campaign
+      const { data: manualData } = await supabase
+        .from('manual_characters')
+        .select('*')
+        .eq('campaign_id', campaignId)
+        .order('created_at');
+      setManualChars(manualData || []);
+
       setLoading(false);
     }
 
@@ -473,6 +488,94 @@ export default function SessionView() {
       }
     }
     setLinkingParty(false);
+  };
+
+  // ─── Manual character CRUD ──────────────────────────────────
+  const resetManualForm = () => {
+    setManualForm({ name: '', class: '', level: 1, race: '', ac: '', hp: '', pp: '', notes: '' });
+    setEditingManualChar(null);
+    setShowManualForm(false);
+  };
+
+  const openEditManualChar = (mc) => {
+    setEditingManualChar(mc);
+    setManualForm({
+      name: mc.name,
+      class: mc.class,
+      level: mc.level,
+      race: mc.race || '',
+      ac: mc.ac ?? '',
+      hp: mc.hp ?? '',
+      pp: mc.pp ?? '',
+      notes: mc.notes || '',
+    });
+    setShowManualForm(true);
+  };
+
+  const saveManualChar = async () => {
+    if (!manualForm.name.trim() || !manualForm.class.trim() || !supabase) return;
+    setSavingManual(true);
+
+    const payload = {
+      campaign_id: campaignId,
+      name: manualForm.name.trim(),
+      class: manualForm.class.trim(),
+      level: parseInt(manualForm.level) || 1,
+      race: manualForm.race.trim() || null,
+      ac: manualForm.ac !== '' ? parseInt(manualForm.ac) : null,
+      hp: manualForm.hp !== '' ? parseInt(manualForm.hp) : null,
+      max_hp: manualForm.hp !== '' ? parseInt(manualForm.hp) : null,
+      pp: manualForm.pp !== '' ? parseInt(manualForm.pp) : null,
+      notes: manualForm.notes.trim() || null,
+      updated_at: new Date().toISOString(),
+    };
+
+    if (editingManualChar) {
+      const { data, error } = await supabase
+        .from('manual_characters')
+        .update(payload)
+        .eq('id', editingManualChar.id)
+        .select()
+        .single();
+      if (!error && data) {
+        setManualChars(prev => prev.map(mc => mc.id === data.id ? data : mc));
+      }
+    } else {
+      const { data, error } = await supabase
+        .from('manual_characters')
+        .insert(payload)
+        .select()
+        .single();
+      if (!error && data) {
+        setManualChars(prev => [...prev, data]);
+      }
+    }
+
+    setSavingManual(false);
+    resetManualForm();
+  };
+
+  const deleteManualChar = async (id) => {
+    if (!supabase) return;
+    await supabase.from('manual_characters').delete().eq('id', id);
+    setManualChars(prev => prev.filter(mc => mc.id !== id));
+  };
+
+  const updateManualCharField = async (id, field, value) => {
+    if (!supabase) return;
+    const numVal = parseInt(value);
+    if (isNaN(numVal)) return;
+    const update = { [field]: numVal, updated_at: new Date().toISOString() };
+    if (field === 'hp') update.max_hp = numVal;
+    const { data, error } = await supabase
+      .from('manual_characters')
+      .update(update)
+      .eq('id', id)
+      .select()
+      .single();
+    if (!error && data) {
+      setManualChars(prev => prev.map(mc => mc.id === data.id ? data : mc));
+    }
   };
 
   // ─── Start a new session ─────────────────────────────────────
@@ -689,7 +792,7 @@ export default function SessionView() {
   const nextRound = () => setCombatRound(r => r + 1);
 
   const addPartyToInitiative = () => {
-    const partyCombatants = partyMembers
+    const ceCombatants = partyMembers
       .filter(m => m.character)
       .map(m => {
         const stats = parseCharStats(m.character);
@@ -705,7 +808,22 @@ export default function SessionView() {
           notes: '',
         };
       });
-    setCombatants(prev => [...prev, ...partyCombatants].sort((a, b) => b.init - a.init));
+    const manualCombatants = manualChars.map(mc => {
+      const dexMod = 0; // manual chars don't track ability scores
+      const roll = Math.floor(Math.random() * 20) + 1 + dexMod;
+      return {
+        id: crypto.randomUUID(),
+        name: mc.name,
+        init: roll,
+        hp: typeof mc.hp === 'number' ? mc.hp : 0,
+        maxHp: typeof mc.max_hp === 'number' ? mc.max_hp : 0,
+        active: true,
+        isParty: true,
+        notes: '',
+      };
+    });
+    const allParty = [...ceCombatants, ...manualCombatants];
+    setCombatants(prev => [...prev, ...allParty].sort((a, b) => b.init - a.init));
   };
 
   // ─── Quick NPC generator (AI-powered with template fallback) ─
@@ -1907,8 +2025,54 @@ export default function SessionView() {
     <div className="flex flex-col gap-5 h-full">
       {/* Party Members */}
       <div>
-        <SectionHeader icon={Users} title="Party" />
-        {partyMembers.length === 0 && !campaign?.party_id ? (
+        <SectionHeader icon={Users} title="Party">
+          <button
+            onClick={() => { setEditingManualChar(null); setManualForm({ name: '', class: '', level: 1, race: '', ac: '', hp: '', pp: '', notes: '' }); setShowManualForm(true); }}
+            className="p-1 text-domain-amber border border-domain-panel-border/50 rounded hover:border-eg4h-gold-dark/60 transition-colors cursor-pointer"
+            title="Add Character"
+          >
+            <Plus className="w-3 h-3" />
+          </button>
+        </SectionHeader>
+
+        {/* Manual Character Form */}
+        {showManualForm && (
+          <Card className="mb-2 !bg-domain-panel-raised">
+            <div className="grid grid-cols-2 gap-2 mb-2">
+              <input type="text" placeholder="Name *" value={manualForm.name} onChange={e => setManualForm(f => ({ ...f, name: e.target.value }))}
+                className="px-2 py-1.5 bg-[rgba(15,12,8,0.50)] border border-domain-panel-border/30 rounded text-xs text-domain-text placeholder-domain-text-dim/60 focus:border-eg4h-gold-dark focus:outline-none font-crimson" autoFocus />
+              <input type="text" placeholder="Class *" value={manualForm.class} onChange={e => setManualForm(f => ({ ...f, class: e.target.value }))}
+                className="px-2 py-1.5 bg-[rgba(15,12,8,0.50)] border border-domain-panel-border/30 rounded text-xs text-domain-text placeholder-domain-text-dim/60 focus:border-eg4h-gold-dark focus:outline-none font-crimson" />
+              <input type="number" placeholder="Level *" value={manualForm.level} onChange={e => setManualForm(f => ({ ...f, level: e.target.value }))} min="1" max="20"
+                className="px-2 py-1.5 bg-[rgba(15,12,8,0.50)] border border-domain-panel-border/30 rounded text-xs text-domain-text placeholder-domain-text-dim/60 focus:border-eg4h-gold-dark focus:outline-none font-crimson" />
+              <input type="text" placeholder="Race" value={manualForm.race} onChange={e => setManualForm(f => ({ ...f, race: e.target.value }))}
+                className="px-2 py-1.5 bg-[rgba(15,12,8,0.50)] border border-domain-panel-border/30 rounded text-xs text-domain-text placeholder-domain-text-dim/60 focus:border-eg4h-gold-dark focus:outline-none font-crimson" />
+            </div>
+            <div className="grid grid-cols-3 gap-2 mb-2">
+              <input type="number" placeholder="AC" value={manualForm.ac} onChange={e => setManualForm(f => ({ ...f, ac: e.target.value }))}
+                className="px-2 py-1.5 bg-[rgba(15,12,8,0.50)] border border-domain-panel-border/30 rounded text-xs text-domain-text placeholder-domain-text-dim/60 focus:border-eg4h-gold-dark focus:outline-none font-crimson" />
+              <input type="number" placeholder="HP" value={manualForm.hp} onChange={e => setManualForm(f => ({ ...f, hp: e.target.value }))}
+                className="px-2 py-1.5 bg-[rgba(15,12,8,0.50)] border border-domain-panel-border/30 rounded text-xs text-domain-text placeholder-domain-text-dim/60 focus:border-eg4h-gold-dark focus:outline-none font-crimson" />
+              <input type="number" placeholder="PP" value={manualForm.pp} onChange={e => setManualForm(f => ({ ...f, pp: e.target.value }))}
+                className="px-2 py-1.5 bg-[rgba(15,12,8,0.50)] border border-domain-panel-border/30 rounded text-xs text-domain-text placeholder-domain-text-dim/60 focus:border-eg4h-gold-dark focus:outline-none font-crimson" />
+            </div>
+            <textarea placeholder="Notes (backstory, bonds, quirks...)" value={manualForm.notes} onChange={e => setManualForm(f => ({ ...f, notes: e.target.value }))} rows={2}
+              className="w-full px-2 py-1.5 mb-2 bg-[rgba(15,12,8,0.50)] border border-domain-panel-border/30 rounded text-xs text-domain-text placeholder-domain-text-dim/60 focus:border-eg4h-gold-dark focus:outline-none font-crimson resize-none" />
+            <div className="flex gap-2">
+              <button onClick={saveManualChar} disabled={!manualForm.name.trim() || !manualForm.class.trim() || savingManual}
+                className="px-3 py-1.5 text-[10px] font-cinzel font-semibold text-eg4h-black bg-gradient-to-r from-eg4h-gold to-eg4h-gold-light rounded disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer">
+                {savingManual ? 'Saving...' : editingManualChar ? 'Update' : 'Add'}
+              </button>
+              <button onClick={resetManualForm}
+                className="px-3 py-1.5 text-[10px] font-ui text-domain-text-dim hover:text-domain-text transition-colors cursor-pointer">
+                Cancel
+              </button>
+            </div>
+          </Card>
+        )}
+
+        {/* No party and no manual characters */}
+        {partyMembers.length === 0 && manualChars.length === 0 && !campaign?.party_id && !showManualForm ? (
           <div className="dm-panel-raised border rounded-lg p-4">
             <p className="text-xs font-crimson text-domain-text-dim/60 italic mb-3">
               No party linked to this campaign.
@@ -1945,19 +2109,21 @@ export default function SessionView() {
                 </div>
               </div>
             ) : (
-              <button
-                onClick={() => { fetchAvailableParties(); setShowPartyLink(true); }}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-cinzel font-semibold text-eg4h-black bg-gradient-to-r from-eg4h-gold to-eg4h-gold-light rounded-lg hover:shadow-[0_2px_10px_rgba(255,215,0,0.3)] transition-all cursor-pointer"
-              >
-                <Link2 className="w-3.5 h-3.5" /> Link a Party
-              </button>
+              <div className="flex flex-col gap-2">
+                <button
+                  onClick={() => { fetchAvailableParties(); setShowPartyLink(true); }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-cinzel font-semibold text-eg4h-black bg-gradient-to-r from-eg4h-gold to-eg4h-gold-light rounded-lg hover:shadow-[0_2px_10px_rgba(255,215,0,0.3)] transition-all cursor-pointer"
+                >
+                  <Link2 className="w-3.5 h-3.5" /> Link a CE Party
+                </button>
+                <p className="text-[10px] font-ui text-domain-text-dim/50">Or use the + button above to add characters manually.</p>
+              </div>
             )}
           </div>
-        ) : partyMembers.length === 0 ? (
-          <p className="text-xs font-crimson text-domain-text-dim/50 italic">
-            No members in this party yet.
-          </p>
-        ) : (
+        ) : null}
+
+        {/* CE Party Members */}
+        {partyMembers.length > 0 && (
           <div className="space-y-2">
             {partyMembers.map(m => {
               const stats = parseCharStats(m.character);
@@ -2092,13 +2258,52 @@ export default function SessionView() {
           </div>
         )}
 
+        {/* Manual Characters */}
+        {manualChars.length > 0 && (
+          <div className={`space-y-2 ${partyMembers.length > 0 ? 'mt-2' : ''}`}>
+            {manualChars.map(mc => (
+              <Card key={mc.id}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-cinzel text-sm text-domain-text">{mc.name}</span>
+                    <Pencil className="w-2.5 h-2.5 text-domain-text-dim/40" title="Manual character" />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-ui text-domain-parchment-dark">
+                      {mc.class}{mc.level ? ` ${mc.level}` : ''}
+                    </span>
+                    <button onClick={() => openEditManualChar(mc)} className="p-0.5 rounded text-domain-text-dim/40 hover:text-domain-amber transition-colors cursor-pointer" title="Edit">
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
+                    <button onClick={() => deleteManualChar(mc.id)} className="p-0.5 rounded text-domain-text-dim/40 hover:text-red-400 transition-colors cursor-pointer" title="Remove">
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+                <div className="flex gap-4 mt-1.5 text-xs font-ui text-domain-text-dim">
+                  {mc.ac != null && <span className="flex items-center gap-1"><Shield className="w-3 h-3" /> AC {mc.ac}</span>}
+                  {mc.hp != null && <span className="flex items-center gap-1"><Heart className="w-3 h-3" /> {mc.hp}{mc.max_hp ? `/${mc.max_hp}` : ''}</span>}
+                  {mc.pp != null && <span className="flex items-center gap-1"><Eye className="w-3 h-3" /> PP {mc.pp}</span>}
+                  {mc.race && <span className="text-domain-text-dim/50">{mc.race}</span>}
+                </div>
+                {mc.notes && (
+                  <p className="mt-1.5 text-[10px] font-crimson text-domain-text-dim/60 line-clamp-2">{mc.notes}</p>
+                )}
+              </Card>
+            ))}
+          </div>
+        )}
+
         {/* Party Stats at a Glance */}
-        {partyMembers.length > 0 && (
+        {(partyMembers.length > 0 || manualChars.length > 0) && (
           <div className="mt-3 grid grid-cols-3 gap-2">
             {(() => {
-              const allStats = partyMembers.map(m => parseCharStats(m.character)).filter(s => s.name !== 'Unknown');
-              const avgAC = allStats.length
-                ? Math.round(allStats.reduce((s, st) => s + (typeof st.ac === 'number' ? st.ac : 0), 0) / allStats.length)
+              const ceStats = partyMembers.map(m => parseCharStats(m.character)).filter(s => s.name !== 'Unknown');
+              const manualStats = manualChars.map(mc => ({ charClass: mc.class, ac: mc.ac, hp: mc.hp }));
+              const allStats = [...ceStats, ...manualStats];
+              const withAC = allStats.filter(s => typeof s.ac === 'number');
+              const avgAC = withAC.length
+                ? Math.round(withAC.reduce((s, st) => s + st.ac, 0) / withAC.length)
                 : '—';
               const totalHP = allStats.reduce((s, st) => s + (typeof st.hp === 'number' ? st.hp : 0), 0);
               const hasHealer = allStats.some(st =>

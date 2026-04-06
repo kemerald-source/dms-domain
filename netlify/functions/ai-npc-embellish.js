@@ -79,7 +79,7 @@ async function fetchNpcContext(supabase, campaignId) {
   const campaign = campRes.data;
   if (!campaign) return null;
 
-  // Fetch party if linked
+  // Fetch party (CE + manual) if linked
   let party = [];
   if (campaign.party_id) {
     const { data: members } = await supabase
@@ -94,6 +94,12 @@ async function fetchNpcContext(supabase, campaignId) {
       }).filter(Boolean);
     }
   }
+  // Add manual characters
+  const { data: manualChars } = await supabase
+    .from('manual_characters').select('name, class, level, race').eq('campaign_id', campaignId);
+  (manualChars || []).forEach(mc => {
+    party.push(`${mc.name} (${mc.race || ''} ${mc.class || ''} ${mc.level || ''})`.trim());
+  });
 
   const parts = [`Campaign: ${campaign.name}${campaign.description ? ` — ${campaign.description}` : ''}`];
   if (party.length) parts.push(`Party: ${party.join(', ')}`);

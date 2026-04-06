@@ -84,11 +84,14 @@ async function fetchCampaignContext(supabase, campaignId) {
   ctx.dmEmail = campaign.dm_email;
 
   // Fetch all context sources in parallel
-  const [partyRes, npcsRes, threadsRes, sessionsRes, loreRes, notesRes] = await Promise.all([
-    // 1. Party members
+  const [partyRes, manualRes, npcsRes, threadsRes, sessionsRes, loreRes, notesRes] = await Promise.all([
+    // 1. Party members (from CE)
     campaign.party_id
       ? supabase.from('party_members').select('character_id, user_email, role').eq('party_id', campaign.party_id)
       : { data: [] },
+    // 1b. Manual characters
+    supabase.from('manual_characters').select('name, class, level, race, notes')
+      .eq('campaign_id', campaignId),
     // 2. Active NPCs (alive or unknown, max 10)
     supabase.from('npcs').select('name, role, personality, motivation, quirks, voice_notes')
       .eq('campaign_id', campaignId).in('status', ['alive', 'unknown']).limit(10),
@@ -107,6 +110,7 @@ async function fetchCampaignContext(supabase, campaignId) {
   ]);
 
   // Parse party members with character data
+  ctx.party = [];
   const members = (partyRes.data || []).filter(m => m.role !== 'dm' && m.character_id);
   if (members.length > 0) {
     const charIds = members.map(m => m.character_id);
@@ -139,6 +143,20 @@ async function fetchCampaignContext(supabase, campaignId) {
       };
     }).filter(Boolean);
   }
+
+  // Add manual characters to party context
+  (manualRes.data || []).forEach(mc => {
+    ctx.party.push({
+      name: mc.name,
+      race: mc.race || '',
+      class: mc.class || '',
+      level: mc.level || 1,
+      background: '',
+      backstory: truncate(mc.notes, 200),
+      bonds: '',
+      topScores: '',
+    });
+  });
 
   ctx.npcs = (npcsRes.data || []).map(n => ({
     name: n.name,
