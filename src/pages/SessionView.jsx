@@ -175,17 +175,27 @@ function parseCharStats(cd) {
     else if (['cleric', 'ranger'].includes(cls)) ac = Math.max(ac, 14 + Math.min(dexMod, 2));
   }
 
-  // Passive perception — 10 + WIS mod (+ proficiency if proficient in Perception)
+  // Jack of All Trades — Bard level 2+ adds floor(prof/2) to non-proficient ability checks
+  const profBonus = Math.floor((lvl - 1) / 4) + 2;
+  const classes = cd.classes || [{ name: charClass, level: lvl }];
+  const hasJoAT = classes.some(cls => cls.name === 'Bard' && (cls.level || 0) >= 2);
+  const joatBonus = hasJoAT ? Math.floor(profBonus / 2) : 0;
+
+  // Initiative — DEX mod + JoAT if applicable (initiative is a DEX ability check)
+  const initMod = dexMod + joatBonus;
+
+  // Passive perception — 10 + WIS mod (+ proficiency if proficient in Perception, else JoAT)
   let pp = scores.wis ? 10 + wisMod : null;
-  if (pp != null && cd.skillProfs) {
-    const percProf = cd.skillProfs['Perception'] || 0;
+  if (pp != null) {
+    const percProf = cd.skillProfs ? (cd.skillProfs['Perception'] || 0) : 0;
     if (percProf > 0) {
-      const profBonus = Math.floor((lvl - 1) / 4) + 2;
       pp += profBonus * percProf; // 1 = proficiency, 2 = expertise
+    } else {
+      pp += joatBonus;
     }
   }
 
-  return { name, charClass, level, ac, hp, maxHp, pp, dexMod, scores };
+  return { name, charClass, level, ac, hp, maxHp, pp, dexMod: initMod, scores };
 }
 
 // ═════════════════════════════════════════════════════════════════
