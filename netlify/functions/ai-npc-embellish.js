@@ -69,11 +69,12 @@ function truncate(str, max) {
 }
 
 async function fetchNpcContext(supabase, campaignId) {
-  const [campRes, npcsRes, threadsRes, loreRes] = await Promise.all([
+  const [campRes, npcsRes, threadsRes, loreRes, homebrewRes] = await Promise.all([
     supabase.from('campaigns').select('name, description, party_id').eq('id', campaignId).single(),
     supabase.from('npcs').select('name, role, status').eq('campaign_id', campaignId).in('status', ['alive', 'unknown']).limit(15),
     supabase.from('story_threads').select('title, thread_type').eq('campaign_id', campaignId).neq('status', 'resolved').limit(5),
     supabase.from('world_lore').select('name, type').eq('campaign_id', campaignId).limit(10),
+    supabase.from('homebrew').select('name, type, notes').eq('campaign_id', campaignId),
   ]);
 
   const campaign = campRes.data;
@@ -106,6 +107,7 @@ async function fetchNpcContext(supabase, campaignId) {
   if (npcsRes.data?.length) parts.push(`Existing NPCs: ${npcsRes.data.map(n => `${n.name} (${n.role || n.status})`).join(', ')}`);
   if (threadsRes.data?.length) parts.push(`Active threads: ${threadsRes.data.map(t => t.title).join(', ')}`);
   if (loreRes.data?.length) parts.push(`World lore: ${loreRes.data.map(l => `${l.name} (${l.type})`).join(', ')}`);
+  if (homebrewRes.data?.length) parts.push(`Homebrew content: ${homebrewRes.data.map(h => `${h.name} (${h.type})${h.notes ? ` — ${h.notes}` : ''}`).join(', ')}`);
 
   return parts.join('\n');
 }

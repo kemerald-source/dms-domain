@@ -84,7 +84,7 @@ async function fetchCampaignContext(supabase, campaignId) {
   ctx.dmEmail = campaign.dm_email;
 
   // Fetch all context sources in parallel
-  const [partyRes, manualRes, npcsRes, threadsRes, sessionsRes, loreRes, notesRes, imagesRes] = await Promise.all([
+  const [partyRes, manualRes, npcsRes, threadsRes, sessionsRes, loreRes, notesRes, imagesRes, homebrewRes] = await Promise.all([
     // 1. Party members (from CE)
     campaign.party_id
       ? supabase.from('party_members').select('character_id, user_email, role').eq('party_id', campaign.party_id)
@@ -110,6 +110,9 @@ async function fetchCampaignContext(supabase, campaignId) {
     // 7. Visual assets (gallery images with captions)
     supabase.from('campaign_images').select('caption, tag')
       .eq('campaign_id', campaignId).not('caption', 'is', null).limit(20),
+    // 8. Homebrew content names and types
+    supabase.from('homebrew').select('name, type, notes')
+      .eq('campaign_id', campaignId),
   ]);
 
   // Parse party members with character data
@@ -198,6 +201,12 @@ async function fetchCampaignContext(supabase, campaignId) {
     tag: i.tag || 'other',
   }));
 
+  ctx.homebrew = (homebrewRes.data || []).map(h => ({
+    name: h.name,
+    type: h.type,
+    notes: truncate(h.notes, 100),
+  }));
+
   return ctx;
 }
 
@@ -247,6 +256,12 @@ function formatContext(ctx) {
   if (ctx.visualAssets?.length) {
     sections.push('VISUAL ASSETS (maps, handouts, portraits the DM has uploaded — reference these when relevant):\n' + ctx.visualAssets.map(a =>
       `- ${a.caption} (${a.tag})`
+    ).join('\n'));
+  }
+
+  if (ctx.homebrew?.length) {
+    sections.push('HOMEBREW CONTENT (custom content the DM has created — reference by name when relevant):\n' + ctx.homebrew.map(h =>
+      `- ${h.name} (${h.type})${h.notes ? `: ${h.notes}` : ''}`
     ).join('\n'));
   }
 
