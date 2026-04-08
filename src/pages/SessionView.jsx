@@ -273,6 +273,8 @@ export default function SessionView() {
   const [homebrewForm, setHomebrewForm] = useState({ name: '', type: 'other', notes: '' });
   const [homebrewFile, setHomebrewFile] = useState(null);
   const [savingHomebrew, setSavingHomebrew] = useState(false);
+  const [previewPdf, setPreviewPdf] = useState(null);
+  const [expandedHomebrewCats, setExpandedHomebrewCats] = useState({});
   const homebrewInputRef = useRef(null);
 
   // NPC image upload state
@@ -2461,43 +2463,76 @@ export default function SessionView() {
 
         {homebrewItems.length === 0 && !showHomebrewForm ? (
           <p className="text-xs font-crimson text-domain-text-dim/50 italic">No homebrew uploads yet. Add custom monsters, classes, items, and house rules.</p>
-        ) : (
-          <div className="space-y-2 max-h-48 overflow-y-auto">
-            {homebrewItems.map(item => (
-              <Card key={item.id} className="!p-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <FileText className="w-3.5 h-3.5 text-domain-amber shrink-0" />
-                    <span className={`px-1.5 py-0.5 text-[10px] font-ui rounded shrink-0 ${
-                      item.type === 'monster' ? 'bg-red-900/30 text-red-300' :
-                      item.type === 'class' ? 'bg-blue-900/30 text-blue-300' :
-                      item.type === 'subclass' ? 'bg-indigo-900/30 text-indigo-300' :
-                      item.type === 'race' ? 'bg-green-900/30 text-green-300' :
-                      item.type === 'item' ? 'bg-yellow-900/30 text-yellow-300' :
-                      item.type === 'spell' ? 'bg-purple-900/30 text-purple-300' :
-                      item.type === 'rule' ? 'bg-orange-900/30 text-orange-300' :
-                      'bg-domain-warm/30 text-domain-parchment-dark'
-                    }`}>{item.type}</span>
-                    <a href={item.file_url} target="_blank" rel="noopener noreferrer" className="font-cinzel text-xs text-domain-text truncate hover:text-domain-amber transition-colors" title="Open PDF">
-                      {item.name}
-                    </a>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0 ml-2">
-                    <button onClick={() => openEditHomebrew(item)} className="text-domain-text-dim/40 hover:text-domain-amber cursor-pointer">
-                      <Pencil className="w-3 h-3" />
-                    </button>
-                    <button onClick={() => deleteHomebrew(item)} className="text-domain-text-dim/40 hover:text-red-400 cursor-pointer">
-                      <Trash2 className="w-3 h-3" />
-                    </button>
-                  </div>
+        ) : (() => {
+          const grouped = {};
+          homebrewItems.forEach(item => {
+            const t = item.type || 'other';
+            if (!grouped[t]) grouped[t] = [];
+            grouped[t].push(item);
+          });
+          const typeOrder = ['monster', 'class', 'subclass', 'race', 'item', 'spell', 'rule', 'other'];
+          const sortedTypes = Object.keys(grouped).sort((a, b) => typeOrder.indexOf(a) - typeOrder.indexOf(b));
+          const defaultExpanded = homebrewItems.length <= 5;
+          const isExpanded = (type) => expandedHomebrewCats[type] ?? defaultExpanded;
+          const toggleCat = (type) => setExpandedHomebrewCats(prev => ({ ...prev, [type]: !(prev[type] ?? defaultExpanded) }));
+          const typeBadgeClass = (type) =>
+            type === 'monster' ? 'bg-red-900/30 text-red-300' :
+            type === 'class' ? 'bg-blue-900/30 text-blue-300' :
+            type === 'subclass' ? 'bg-indigo-900/30 text-indigo-300' :
+            type === 'race' ? 'bg-green-900/30 text-green-300' :
+            type === 'item' ? 'bg-yellow-900/30 text-yellow-300' :
+            type === 'spell' ? 'bg-purple-900/30 text-purple-300' :
+            type === 'rule' ? 'bg-orange-900/30 text-orange-300' :
+            'bg-domain-warm/30 text-domain-parchment-dark';
+
+          return (
+            <div className="space-y-1 max-h-64 overflow-y-auto">
+              {sortedTypes.map(type => (
+                <div key={type}>
+                  <button
+                    onClick={() => toggleCat(type)}
+                    className="w-full flex items-center gap-2 px-2 py-1.5 text-xs font-cinzel text-domain-text hover:text-eg4h-gold bg-domain-panel/40 border border-domain-panel-border/20 rounded transition-colors cursor-pointer"
+                  >
+                    {isExpanded(type) ? <ChevronDown className="w-3 h-3 shrink-0" /> : <ChevronRight className="w-3 h-3 shrink-0" />}
+                    <span className={`px-1.5 py-0.5 text-[10px] font-ui rounded ${typeBadgeClass(type)}`}>{type}</span>
+                    <span className="text-domain-text-dim/60 text-[10px] font-ui">({grouped[type].length})</span>
+                  </button>
+                  {isExpanded(type) && (
+                    <div className="space-y-1 mt-1 ml-2">
+                      {grouped[type].map(item => (
+                        <Card key={item.id} className="!p-2">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <FileText className="w-3.5 h-3.5 text-domain-amber shrink-0" />
+                              <button
+                                onClick={() => setPreviewPdf({ url: item.file_url, name: item.name })}
+                                className="font-cinzel text-xs text-domain-text truncate hover:text-domain-amber transition-colors cursor-pointer text-left"
+                                title="View PDF"
+                              >
+                                {item.name}
+                              </button>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0 ml-2">
+                              <button onClick={() => openEditHomebrew(item)} className="text-domain-text-dim/40 hover:text-domain-amber cursor-pointer">
+                                <Pencil className="w-3 h-3" />
+                              </button>
+                              <button onClick={() => deleteHomebrew(item)} className="text-domain-text-dim/40 hover:text-red-400 cursor-pointer">
+                                <Trash2 className="w-3 h-3" />
+                              </button>
+                            </div>
+                          </div>
+                          {item.notes && (
+                            <p className="text-xs font-crimson text-domain-text-dim/60 mt-1 italic line-clamp-2 ml-[22px]">{item.notes}</p>
+                          )}
+                        </Card>
+                      ))}
+                    </div>
+                  )}
                 </div>
-                {item.notes && (
-                  <p className="text-xs font-crimson text-domain-text-dim/60 mt-1 italic line-clamp-2 ml-[22px]">{item.notes}</p>
-                )}
-              </Card>
-            ))}
-          </div>
-        )}
+              ))}
+            </div>
+          );
+        })()}
       </div>
 
       {/* Campaign Gallery */}
@@ -3374,6 +3409,41 @@ export default function SessionView() {
             >
               <X className="w-4 h-4" />
             </button>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* PDF preview modal — portaled to document.body */}
+      {previewPdf && createPortal(
+        <div
+          className="fixed inset-0 flex items-center justify-center bg-black/85 backdrop-blur-sm p-4"
+          style={{ zIndex: 9999 }}
+          onClick={() => setPreviewPdf(null)}
+        >
+          <div
+            className="relative w-full max-w-4xl h-[85vh] flex flex-col bg-domain-dark rounded-xl border border-domain-panel-border/40 overflow-hidden"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-4 py-2 border-b border-domain-panel-border/30">
+              <span className="font-cinzel text-sm text-domain-text truncate">{previewPdf.name}</span>
+              <div className="flex items-center gap-3 shrink-0">
+                <a href={previewPdf.url} target="_blank" rel="noopener noreferrer" className="text-[10px] font-ui text-domain-text-dim hover:text-domain-amber transition-colors">
+                  Open in new tab
+                </a>
+                <button
+                  onClick={() => setPreviewPdf(null)}
+                  className="w-7 h-7 bg-domain-warm/30 border border-domain-panel-border/50 rounded-full flex items-center justify-center text-domain-text-dim hover:text-white transition-colors cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+            <iframe
+              src={previewPdf.url}
+              className="flex-1 w-full bg-white"
+              title={previewPdf.name}
+            />
           </div>
         </div>,
         document.body
