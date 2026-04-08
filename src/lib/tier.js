@@ -10,6 +10,7 @@ export const FREE_LIMITS = {
   threads: 5,
   lore: 5,
   gallery: 5,
+  homebrew: 3,
 };
 
 // ─── Stripe price IDs (for checkout links) ───────────────────

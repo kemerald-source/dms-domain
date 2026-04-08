@@ -7,7 +7,7 @@ import {
   Scroll, Sparkles, Globe, ChevronUp, ChevronDown, Shield,
   Heart, Eye, X, GripVertical, Pencil, Save, Lock, EyeOff, Dices,
   ChevronRight, BookMarked, MapPin, Clock, Mail, MailOpen, Check, Zap, RotateCcw, Layers, Link2,
-  ImageIcon, Upload, Tag, UserPlus, Copy, LinkIcon,
+  ImageIcon, Upload, Tag, UserPlus, Copy, LinkIcon, FileText,
 } from 'lucide-react';
 import { useAuth } from '@/api/AuthContext';
 import { supabase } from '@/lib/supabase';
@@ -266,6 +266,15 @@ export default function SessionView() {
   const [captionText, setCaptionText] = useState('');
   const [linkingNpcImageId, setLinkingNpcImageId] = useState(null);
 
+  // Homebrew state
+  const [homebrewItems, setHomebrewItems] = useState([]);
+  const [showHomebrewForm, setShowHomebrewForm] = useState(false);
+  const [editingHomebrew, setEditingHomebrew] = useState(null);
+  const [homebrewForm, setHomebrewForm] = useState({ name: '', type: 'other', notes: '' });
+  const [homebrewFile, setHomebrewFile] = useState(null);
+  const [savingHomebrew, setSavingHomebrew] = useState(false);
+  const homebrewInputRef = useRef(null);
+
   // NPC image upload state
   const [uploadingNpcImage, setUploadingNpcImage] = useState(null);
   const npcImageInputRef = useRef(null);
@@ -456,6 +465,14 @@ export default function SessionView() {
         .eq('campaign_id', campaignId)
         .order('created_at', { ascending: false });
       setGalleryImages(galleryData || []);
+
+      // Fetch homebrew items for this campaign
+      const { data: homebrewData } = await supabase
+        .from('homebrew')
+        .select('*')
+        .eq('campaign_id', campaignId)
+        .order('created_at', { ascending: false });
+      setHomebrewItems(homebrewData || []);
 
       // Fetch manual characters for this campaign
       const { data: manualData } = await supabase
@@ -810,6 +827,93 @@ export default function SessionView() {
     // Tag as portrait if not already
     if (img.tag !== 'portrait') await updateGalleryTag(imgId, 'portrait');
     setLinkingNpcImageId(null);
+  };
+
+  // ─── Homebrew CRUD ──────────────────────────────────────────
+  const MAX_PDF_SIZE = 10 * 1024 * 1024; // 10MB
+
+  const openNewHomebrew = () => {
+    if (!isDM && homebrewItems.length >= FREE_LIMITS.homebrew) {
+      requireDM(`Free tier allows ${FREE_LIMITS.homebrew} homebrew uploads per campaign. Upgrade for unlimited homebrew.`);
+      return;
+    }
+    setEditingHomebrew(null);
+    setHomebrewForm({ name: '', type: 'other', notes: '' });
+    setHomebrewFile(null);
+    homebrewInputRef.current?.click();
+  };
+
+  const handleHomebrewFileSelect = (file) => {
+    if (!file) return;
+    if (file.type !== 'application/pdf') {
+      alert('Only PDF files are accepted.');
+      return;
+    }
+    if (file.size > MAX_PDF_SIZE) {
+      alert('PDF must be under 10MB.');
+      return;
+    }
+    // Auto-fill name from filename (strip extension)
+    const autoName = file.name.replace(/\.pdf$/i, '');
+    setHomebrewFile(file);
+    setHomebrewForm({ name: autoName, type: 'other', notes: '' });
+    setEditingHomebrew(null);
+    setShowHomebrewForm(true);
+  };
+
+  const openEditHomebrew = (item) => {
+    setEditingHomebrew(item);
+    setHomebrewForm({ name: item.name, type: item.type || 'other', notes: item.notes || '' });
+    setHomebrewFile(null);
+    setShowHomebrewForm(true);
+  };
+
+  const saveHomebrew = async () => {
+    if (!homebrewForm.name.trim() || !supabase) return;
+    setSavingHomebrew(true);
+
+    if (editingHomebrew) {
+      // Update metadata only
+      const { data, error } = await supabase
+        .from('homebrew')
+        .update({ name: homebrewForm.name.trim(), type: homebrewForm.type, notes: homebrewForm.notes.trim() || null })
+        .eq('id', editingHomebrew.id)
+        .select()
+        .single();
+      if (!error && data) setHomebrewItems(prev => prev.map(h => h.id === data.id ? data : h));
+    } else {
+      // New upload — must have file
+      if (!homebrewFile) { setSavingHomebrew(false); return; }
+      const id = crypto.randomUUID();
+      const path = `${campaignId}/${id}.pdf`;
+      const { error: upErr } = await supabase.storage.from('campaign-files').upload(path, homebrewFile, { contentType: 'application/pdf' });
+      if (upErr) { alert('Upload failed: ' + upErr.message); setSavingHomebrew(false); return; }
+      const { data: urlData } = supabase.storage.from('campaign-files').getPublicUrl(path);
+      const fileUrl = urlData?.publicUrl;
+
+      const { data, error } = await supabase
+        .from('homebrew')
+        .insert({ campaign_id: campaignId, name: homebrewForm.name.trim(), type: homebrewForm.type, file_url: fileUrl, notes: homebrewForm.notes.trim() || null })
+        .select()
+        .single();
+      if (!error && data) setHomebrewItems(prev => [data, ...prev]);
+    }
+
+    setShowHomebrewForm(false);
+    setEditingHomebrew(null);
+    setHomebrewFile(null);
+    setSavingHomebrew(false);
+  };
+
+  const deleteHomebrew = async (item) => {
+    if (!supabase || !confirm('Delete this homebrew upload? This cannot be undone.')) return;
+    // Remove file from storage
+    if (item.file_url) {
+      const match = item.file_url.match(/campaign-files\/(.+)$/);
+      if (match) await supabase.storage.from('campaign-files').remove([match[1]]);
+    }
+    const { error } = await supabase.from('homebrew').delete().eq('id', item.id);
+    if (!error) setHomebrewItems(prev => prev.filter(h => h.id !== item.id));
   };
 
   // ─── Invite management ───────────────────────────────────────
@@ -2309,6 +2413,93 @@ export default function SessionView() {
         )}
       </div>
 
+      {/* Homebrew */}
+      <div className="shrink-0">
+        <SectionHeader icon={FileText} title={`Homebrew${!isDM ? ` (${homebrewItems.length}/${FREE_LIMITS.homebrew})` : ''}`}>
+          <button onClick={openNewHomebrew} className="flex items-center gap-1 px-2 py-1 text-xs font-ui text-domain-amber border border-domain-panel-border/50 rounded hover:border-eg4h-gold-dark/60 transition-colors cursor-pointer">
+            <Plus className="w-3 h-3" /> Upload
+          </button>
+        </SectionHeader>
+
+        {/* Homebrew upload form */}
+        <AnimatePresence>
+          {showHomebrewForm && (
+            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
+              <Card className="mb-3 !bg-domain-panel-raised">
+                <p className="text-xs font-cinzel text-domain-text mb-2">{editingHomebrew ? 'Edit Homebrew' : 'Upload Homebrew'}</p>
+                {homebrewFile && (
+                  <div className="flex items-center gap-2 mb-2 px-2 py-1.5 bg-domain-warm/20 rounded text-xs font-crimson text-domain-text-dim">
+                    <FileText className="w-3.5 h-3.5 text-domain-amber shrink-0" />
+                    <span className="truncate">{homebrewFile.name}</span>
+                    <span className="text-domain-text-dim/50 shrink-0">({(homebrewFile.size / 1024 / 1024).toFixed(1)} MB)</span>
+                  </div>
+                )}
+                <div className="space-y-2">
+                  <input type="text" placeholder="Name (e.g. Shadowfell Monster Manual)" value={homebrewForm.name} onChange={e => setHomebrewForm(p => ({ ...p, name: e.target.value }))} className={inputClass} autoFocus />
+                  <select value={homebrewForm.type} onChange={e => setHomebrewForm(p => ({ ...p, type: e.target.value }))} className={selectClass}>
+                    <option value="monster">Monster</option>
+                    <option value="class">Class</option>
+                    <option value="subclass">Subclass</option>
+                    <option value="race">Race</option>
+                    <option value="item">Item</option>
+                    <option value="spell">Spell</option>
+                    <option value="rule">Rule</option>
+                    <option value="other">Other</option>
+                  </select>
+                  <textarea placeholder="Notes (optional)" value={homebrewForm.notes} onChange={e => setHomebrewForm(p => ({ ...p, notes: e.target.value }))} rows={2} className={`${inputClass} resize-none`} />
+                  <div className="flex gap-2 pt-1">
+                    <button onClick={saveHomebrew} disabled={!homebrewForm.name.trim() || (!editingHomebrew && !homebrewFile) || savingHomebrew} className={goldBtnClass}>
+                      {savingHomebrew ? 'Saving...' : editingHomebrew ? 'Update' : 'Upload'}
+                    </button>
+                    <button onClick={() => { setShowHomebrewForm(false); setEditingHomebrew(null); setHomebrewFile(null); }} className={ghostBtnClass}>Cancel</button>
+                  </div>
+                </div>
+              </Card>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {homebrewItems.length === 0 && !showHomebrewForm ? (
+          <p className="text-xs font-crimson text-domain-text-dim/50 italic">No homebrew uploads yet. Add custom monsters, classes, items, and house rules.</p>
+        ) : (
+          <div className="space-y-2 max-h-48 overflow-y-auto">
+            {homebrewItems.map(item => (
+              <Card key={item.id} className="!p-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <FileText className="w-3.5 h-3.5 text-domain-amber shrink-0" />
+                    <span className={`px-1.5 py-0.5 text-[10px] font-ui rounded shrink-0 ${
+                      item.type === 'monster' ? 'bg-red-900/30 text-red-300' :
+                      item.type === 'class' ? 'bg-blue-900/30 text-blue-300' :
+                      item.type === 'subclass' ? 'bg-indigo-900/30 text-indigo-300' :
+                      item.type === 'race' ? 'bg-green-900/30 text-green-300' :
+                      item.type === 'item' ? 'bg-yellow-900/30 text-yellow-300' :
+                      item.type === 'spell' ? 'bg-purple-900/30 text-purple-300' :
+                      item.type === 'rule' ? 'bg-orange-900/30 text-orange-300' :
+                      'bg-domain-warm/30 text-domain-parchment-dark'
+                    }`}>{item.type}</span>
+                    <a href={item.file_url} target="_blank" rel="noopener noreferrer" className="font-cinzel text-xs text-domain-text truncate hover:text-domain-amber transition-colors" title="Open PDF">
+                      {item.name}
+                    </a>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0 ml-2">
+                    <button onClick={() => openEditHomebrew(item)} className="text-domain-text-dim/40 hover:text-domain-amber cursor-pointer">
+                      <Pencil className="w-3 h-3" />
+                    </button>
+                    <button onClick={() => deleteHomebrew(item)} className="text-domain-text-dim/40 hover:text-red-400 cursor-pointer">
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  </div>
+                </div>
+                {item.notes && (
+                  <p className="text-xs font-crimson text-domain-text-dim/60 mt-1 italic line-clamp-2 ml-[22px]">{item.notes}</p>
+                )}
+              </Card>
+            ))}
+          </div>
+        )}
+      </div>
+
       {/* Campaign Gallery */}
       <div>
         <SectionHeader icon={ImageIcon} title={`Gallery${!isDM ? ` (${galleryImages.length}/${FREE_LIMITS.gallery})` : ''}`}>
@@ -3147,6 +3338,17 @@ export default function SessionView() {
         onChange={(e) => {
           const file = e.target.files?.[0];
           if (file) handleGalleryUpload(file);
+          e.target.value = '';
+        }}
+      />
+      <input
+        ref={homebrewInputRef}
+        type="file"
+        accept="application/pdf"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) handleHomebrewFileSelect(file);
           e.target.value = '';
         }}
       />
