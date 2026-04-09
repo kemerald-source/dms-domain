@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Loader2, Users, Scroll, Image as ImageIcon, Shield, Heart, Eye, ScrollText, X, MapPin } from 'lucide-react';
+import { Loader2, Users, Scroll, Image as ImageIcon, Shield, Heart, Eye, ScrollText, X, MapPin, Crown } from 'lucide-react';
 import { useAuth } from '@/api/AuthContext';
 import { supabase } from '@/lib/supabase';
+import InitialAvatar from '@/components/InitialAvatar';
 
 // ─── Lightweight character parser for player view ─────────────
 // Returns name/race/class/level always; AC/HP/PP only if statsVisible.
@@ -39,6 +40,8 @@ export default function PlayerView() {
   const [accessError, setAccessError] = useState(null);
   const [campaign, setCampaign] = useState(null);
   const [dmName, setDmName] = useState('');
+  const [isDmPreview, setIsDmPreview] = useState(false);
+  const [dmBannerDismissed, setDmBannerDismissed] = useState(false);
   const [myCharacterData, setMyCharacterData] = useState(null);
   const [partyMembers, setPartyMembers] = useState([]);
   const [sessionRecaps, setSessionRecaps] = useState([]);
@@ -60,7 +63,21 @@ export default function PlayerView() {
 
       const userEmailLower = user.email.toLowerCase();
 
-      // 1. Fetch all player members for this campaign in one shot
+      // 1. Fetch the campaign first — we need it for both the DM ownership
+      //    check and the player_stats_visible flag.
+      const { data: camp, error: campErr } = await supabase
+        .from('campaigns')
+        .select('*')
+        .eq('id', campaignId)
+        .single();
+
+      if (campErr || !camp) {
+        setAccessError("This campaign doesn't exist or you don't have access to it.");
+        setLoading(false);
+        return;
+      }
+
+      // 2. Fetch all player members for this campaign in one shot
       //    (used for both the access gate AND the party list)
       const { data: allMembers, error: memberErr } = await supabase
         .from('campaign_members')
@@ -75,29 +92,19 @@ export default function PlayerView() {
         return;
       }
 
-      // 2. Access gate: is the logged-in user one of the player members?
+      // 3. Access gate: DM owner OR a player member
+      const isDmOwner = (camp.dm_email || '').toLowerCase() === userEmailLower;
       const myMembership = (allMembers || []).find(
         m => (m.user_email || '').toLowerCase() === userEmailLower
       );
 
-      if (!myMembership) {
+      if (!isDmOwner && !myMembership) {
         setAccessError("You don't have access to this campaign. Ask your DM for an invite link.");
         setLoading(false);
         return;
       }
 
-      // 3. Fetch the campaign
-      const { data: camp } = await supabase
-        .from('campaigns')
-        .select('*')
-        .eq('id', campaignId)
-        .single();
-
-      if (!camp) {
-        setAccessError("This campaign no longer exists.");
-        setLoading(false);
-        return;
-      }
+      setIsDmPreview(isDmOwner);
       setCampaign(camp);
 
       // Best-effort DM display name from email local part
@@ -111,6 +118,7 @@ export default function PlayerView() {
       //             (c) manual_characters (DM-added stand-ins)
       const charIdsToFetch = new Set();
       const memberRecords = []; // { key, character_id, isMe }
+      const myCharId = myMembership?.character_id ?? null;
 
       if (camp.party_id) {
         const { data: ceMembers } = await supabase
@@ -128,7 +136,7 @@ export default function PlayerView() {
           memberRecords.push({
             key: `ce-${m.id}`,
             character_id: m.character_id,
-            isMe: m.character_id === myMembership.character_id,
+            isMe: myCharId != null && m.character_id === myCharId,
           });
         });
       }
@@ -140,7 +148,7 @@ export default function PlayerView() {
         memberRecords.push({
           key: `inv-${m.id}`,
           character_id: m.character_id,
-          isMe: m.character_id === myMembership.character_id,
+          isMe: myCharId != null && m.character_id === myCharId,
         });
       });
 
@@ -159,9 +167,11 @@ export default function PlayerView() {
         });
       }
 
-      // Stash my own character_data for the header
-      if (myMembership.character_id && charMap[myMembership.character_id]) {
-        setMyCharacterData(charMap[myMembership.character_id]);
+      // Stash my own character_data for the header (player only — DM has no character)
+      if (myCharId && charMap[myCharId]) {
+        setMyCharacterData(charMap[myCharId]);
+      } else {
+        setMyCharacterData(null);
       }
 
       // Manual characters (DM-added)
@@ -300,6 +310,28 @@ export default function PlayerView() {
       </header>
 
       <main className="max-w-5xl mx-auto px-4 sm:px-6 py-8 relative z-10 space-y-10">
+        {/* DM Preview banner */}
+        {isDmPreview && !dmBannerDismissed && (
+          <div className="flex items-start justify-between gap-3 px-4 py-3 rounded-lg border border-eg4h-gold-dark/40 bg-eg4h-gold/10 -mt-2">
+            <div className="flex items-start gap-2 min-w-0">
+              <Crown className="w-4 h-4 text-eg4h-gold shrink-0 mt-0.5" />
+              <div className="min-w-0">
+                <p className="text-sm font-cinzel text-eg4h-gold">DM Preview</p>
+                <p className="text-xs font-crimson text-domain-text-dim">
+                  This is exactly what your players see. Use the eye toggles in the session view to control what's shared.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => setDmBannerDismissed(true)}
+              className="text-domain-text-dim hover:text-eg4h-gold transition-colors shrink-0 cursor-pointer"
+              title="Dismiss"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
         {/* Mobile-only DM/Playing as */}
         <div className="sm:hidden text-xs font-ui text-domain-text-dim space-y-0.5 -mt-2">
           <p>DM: <span className="text-domain-text">{dmName}</span></p>
@@ -341,9 +373,7 @@ export default function PlayerView() {
                           className="w-12 h-12 rounded-lg object-cover border border-domain-panel-border/40 shrink-0"
                         />
                       ) : (
-                        <div className="w-12 h-12 rounded-lg bg-domain-warm/20 border border-domain-panel-border/40 flex items-center justify-center text-eg4h-gold font-cinzel text-lg font-semibold shrink-0">
-                          {stats.name.charAt(0)}
-                        </div>
+                        <InitialAvatar name={stats.name} size={48} />
                       )}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5">
@@ -497,9 +527,7 @@ export default function PlayerView() {
                         className="w-11 h-11 rounded-lg object-cover border border-domain-panel-border/40 shrink-0 cursor-pointer"
                       />
                     ) : (
-                      <div className="w-11 h-11 rounded-lg bg-domain-warm/20 border border-domain-panel-border/40 flex items-center justify-center text-eg4h-gold/70 font-cinzel font-semibold shrink-0">
-                        {npc.name.charAt(0)}
-                      </div>
+                      <InitialAvatar name={npc.name} size={44} />
                     )}
                     <div className="flex-1 min-w-0">
                       <p className="font-cinzel text-sm text-domain-text">{npc.name}</p>

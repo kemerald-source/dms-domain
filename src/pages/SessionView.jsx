@@ -13,6 +13,7 @@ import { useAuth } from '@/api/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { useTier, FREE_LIMITS } from '@/lib/tier';
 import UpgradeModal from '@/components/UpgradeModal';
+import InitialAvatar from '@/components/InitialAvatar';
 
 // ─── Tab selector for mobile ────────────────────────────────────
 const TABS = [
@@ -2015,9 +2016,15 @@ export default function SessionView() {
                           npcImageInputRef.current?.click();
                         }}
                         disabled={uploadingNpcImage === npc.id}
-                        className="w-11 h-11 rounded-lg border border-dashed border-domain-panel-border/40 flex items-center justify-center text-domain-text-dim/30 hover:text-domain-amber/60 hover:border-domain-amber/40 transition-colors cursor-pointer disabled:opacity-40"
+                        className="relative cursor-pointer disabled:opacity-40"
+                        title="Upload portrait"
                       >
-                        {uploadingNpcImage === npc.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <ImageIcon className="w-4 h-4" />}
+                        <InitialAvatar name={npc.name} size={44} />
+                        <span className="absolute inset-0 flex items-center justify-center bg-black/60 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity">
+                          {uploadingNpcImage === npc.id
+                            ? <Loader2 className="w-4 h-4 animate-spin text-eg4h-gold" />
+                            : <ImageIcon className="w-4 h-4 text-eg4h-gold" />}
+                        </span>
                       </button>
                     )}
                   </div>
