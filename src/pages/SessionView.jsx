@@ -1670,7 +1670,28 @@ export default function SessionView() {
         {activeNote ? (
           <div>
             <div className="flex items-center justify-between mb-2">
-              <p className="text-xs font-cinzel text-domain-text">Session {activeNote.session_number}</p>
+              <div className="flex items-center gap-2">
+                <p className="text-xs font-cinzel text-domain-text">Session {activeNote.session_number}</p>
+                <button
+                  onClick={async () => {
+                    if (!supabase) return;
+                    const newVal = !activeNote.player_visible;
+                    setSessionNotes(prev => prev.map(n => n.id === activeNote.id ? { ...n, player_visible: newVal } : n));
+                    const { error } = await supabase
+                      .from('session_notes')
+                      .update({ player_visible: newVal })
+                      .eq('id', activeNote.id);
+                    if (error) {
+                      console.error('Failed to toggle session visibility:', error);
+                      setSessionNotes(prev => prev.map(n => n.id === activeNote.id ? { ...n, player_visible: !newVal } : n));
+                    }
+                  }}
+                  className={`p-0.5 rounded transition-colors cursor-pointer ${activeNote.player_visible ? 'text-eg4h-gold' : 'text-domain-text-dim/40 hover:text-domain-amber'}`}
+                  title={activeNote.player_visible ? 'Visible to players — click to hide' : 'Hidden from players — click to share'}
+                >
+                  {activeNote.player_visible ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+                </button>
+              </div>
               {activeNote.created_at && (
                 <span className="text-[10px] font-ui text-domain-text-dim/50 flex items-center gap-1">
                   <Clock className="w-2.5 h-2.5" />
@@ -2021,6 +2042,27 @@ export default function SessionView() {
                           <option value="missing" className="bg-domain-dark text-yellow-400">missing</option>
                           <option value="unknown" className="bg-domain-dark text-gray-400">unknown</option>
                         </select>
+                        <button
+                          onClick={async () => {
+                            if (!supabase) return;
+                            // Default to true server-side, so undefined means visible
+                            const current = npc.player_visible !== false;
+                            const newVal = !current;
+                            setNpcs(prev => prev.map(n => n.id === npc.id ? { ...n, player_visible: newVal } : n));
+                            const { error } = await supabase
+                              .from('npcs')
+                              .update({ player_visible: newVal })
+                              .eq('id', npc.id);
+                            if (error) {
+                              console.error('Failed to toggle NPC visibility:', error);
+                              setNpcs(prev => prev.map(n => n.id === npc.id ? { ...n, player_visible: current } : n));
+                            }
+                          }}
+                          className={`cursor-pointer ${npc.player_visible !== false ? 'text-eg4h-gold/70 hover:text-eg4h-gold' : 'text-domain-text-dim/40 hover:text-domain-amber'}`}
+                          title={npc.player_visible !== false ? 'Visible to players — click to hide' : 'Hidden from players — click to share'}
+                        >
+                          {npc.player_visible !== false ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
+                        </button>
                         <button onClick={() => openEditNpc(npc)} className="text-domain-text-dim/40 hover:text-domain-amber cursor-pointer">
                           <Pencil className="w-3 h-3" />
                         </button>
@@ -2566,8 +2608,33 @@ export default function SessionView() {
                     {img.tag}
                   </span>
                 )}
+                {/* Persistent shared-with-players badge (always visible when on) */}
+                {img.shared_with_players && (
+                  <span className="absolute bottom-1 right-1 px-1 py-0.5 text-[8px] font-ui bg-eg4h-gold/20 text-eg4h-gold border border-eg4h-gold-dark/40 rounded pointer-events-none">
+                    shared
+                  </span>
+                )}
                 {/* Hover controls */}
                 <div className="absolute top-1 right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none group-hover:pointer-events-auto">
+                  <button
+                    onClick={async () => {
+                      if (!supabase) return;
+                      const newVal = !img.shared_with_players;
+                      setGalleryImages(prev => prev.map(g => g.id === img.id ? { ...g, shared_with_players: newVal } : g));
+                      const { error } = await supabase
+                        .from('campaign_images')
+                        .update({ shared_with_players: newVal })
+                        .eq('id', img.id);
+                      if (error) {
+                        console.error('Failed to toggle image sharing:', error);
+                        setGalleryImages(prev => prev.map(g => g.id === img.id ? { ...g, shared_with_players: !newVal } : g));
+                      }
+                    }}
+                    className={`w-5 h-5 bg-domain-dark/80 border border-domain-panel-border/50 rounded flex items-center justify-center cursor-pointer ${img.shared_with_players ? 'text-eg4h-gold' : 'text-domain-text-dim/60 hover:text-domain-amber'}`}
+                    title={img.shared_with_players ? 'Shared with players — click to hide' : 'Hidden from players — click to share'}
+                  >
+                    {img.shared_with_players ? <Eye className="w-2.5 h-2.5" /> : <EyeOff className="w-2.5 h-2.5" />}
+                  </button>
                   <button
                     onClick={() => deleteGalleryImage(img)}
                     className="w-5 h-5 bg-domain-dark/80 border border-domain-panel-border/50 rounded flex items-center justify-center text-red-400/70 hover:text-red-400 cursor-pointer"
@@ -2775,6 +2842,40 @@ export default function SessionView() {
                     </div>
                   </div>
                 )}
+
+                {/* Player Portal settings */}
+                <div className="mt-3 pt-2 border-t border-domain-panel-border/20">
+                  <p className="text-[10px] font-ui text-domain-text-dim/50 mb-1.5">Player Portal</p>
+                  <label className="flex items-center justify-between gap-2 cursor-pointer group">
+                    <span className="text-[11px] font-crimson text-domain-text-dim group-hover:text-domain-text transition-colors">
+                      Show party stats (AC, HP, PP) to players
+                    </span>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={!!campaign?.player_stats_visible}
+                      onClick={async () => {
+                        if (!supabase || !campaign) return;
+                        const newVal = !campaign.player_stats_visible;
+                        setCampaign(prev => ({ ...prev, player_stats_visible: newVal }));
+                        const { error } = await supabase
+                          .from('campaigns')
+                          .update({ player_stats_visible: newVal })
+                          .eq('id', campaignId);
+                        if (error) {
+                          console.error('Failed to toggle player_stats_visible:', error);
+                          setCampaign(prev => ({ ...prev, player_stats_visible: !newVal }));
+                        }
+                      }}
+                      className={`relative w-8 h-4 rounded-full transition-colors shrink-0 cursor-pointer ${campaign?.player_stats_visible ? 'bg-eg4h-gold/60' : 'bg-domain-panel-border/40'}`}
+                    >
+                      <span className={`absolute top-0.5 w-3 h-3 rounded-full bg-domain-text transition-all ${campaign?.player_stats_visible ? 'left-4' : 'left-0.5'}`} />
+                    </button>
+                  </label>
+                  <p className="text-[9px] font-ui text-domain-text-dim/40 mt-1">
+                    Default off — players only see name, race, and class.
+                  </p>
+                </div>
               </Card>
             </motion.div>
           )}

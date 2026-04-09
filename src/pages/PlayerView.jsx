@@ -1,0 +1,559 @@
+import { useState, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { Loader2, Users, Scroll, Image as ImageIcon, Shield, Heart, Eye, ScrollText, X, MapPin } from 'lucide-react';
+import { useAuth } from '@/api/AuthContext';
+import { supabase } from '@/lib/supabase';
+
+// ─── Lightweight character parser for player view ─────────────
+// Returns name/race/class/level always; AC/HP/PP only if statsVisible.
+// Mirrors the relevant slice of SessionView's parseCharStats.
+function parsePlayerCharStats(cd, statsVisible) {
+  if (!cd) return { name: 'Unknown', charClass: '', level: '', race: '', portrait: null };
+
+  const name = cd.name || cd.characterName || 'Unknown';
+  const charClass = cd.class || cd.className || '';
+  const level = cd.level || '';
+  const race = cd.race || '';
+  const portrait = cd.portrait || cd.portraitUrl || cd.imageUrl || null;
+
+  if (!statsVisible) return { name, charClass, level, race, portrait };
+
+  const overrides = cd.combatOverrides || {};
+  const scores = cd.abilityScores || cd.abilities || cd.baseScores || {};
+  const wisMod = scores.wis ? Math.floor((scores.wis - 10) / 2) : null;
+
+  const ac = overrides.ac ?? cd.ac ?? cd.armorClass ?? null;
+  const maxHp = overrides.hp ?? cd.maxHp ?? null;
+  const hp = cd.currentHp ?? maxHp;
+  const pp = wisMod != null ? 10 + wisMod : null;
+
+  return { name, charClass, level, race, portrait, ac, hp, maxHp, pp };
+}
+
+export default function PlayerView() {
+  const { id: campaignId } = useParams();
+  const navigate = useNavigate();
+  const { user, isAuthenticated, loading: authLoading, login } = useAuth();
+
+  const [loading, setLoading] = useState(true);
+  const [accessError, setAccessError] = useState(null);
+  const [campaign, setCampaign] = useState(null);
+  const [dmName, setDmName] = useState('');
+  const [myCharacterData, setMyCharacterData] = useState(null);
+  const [partyMembers, setPartyMembers] = useState([]);
+  const [sessionRecaps, setSessionRecaps] = useState([]);
+  const [sharedImages, setSharedImages] = useState([]);
+  const [npcs, setNpcs] = useState([]);
+  const [previewImage, setPreviewImage] = useState(null);
+
+  // Auth guard — redirect to login if not signed in
+  useEffect(() => {
+    if (!authLoading && !isAuthenticated) login();
+  }, [authLoading, isAuthenticated, login]);
+
+  useEffect(() => {
+    if (!user?.email || !supabase || !campaignId) return;
+
+    async function load() {
+      setLoading(true);
+      setAccessError(null);
+
+      const userEmailLower = user.email.toLowerCase();
+
+      // 1. Fetch all player members for this campaign in one shot
+      //    (used for both the access gate AND the party list)
+      const { data: allMembers, error: memberErr } = await supabase
+        .from('campaign_members')
+        .select('*')
+        .eq('campaign_id', campaignId)
+        .eq('role', 'player');
+
+      if (memberErr) {
+        console.error('Membership check failed:', memberErr);
+        setAccessError("Couldn't verify your access. Try refreshing the page.");
+        setLoading(false);
+        return;
+      }
+
+      // 2. Access gate: is the logged-in user one of the player members?
+      const myMembership = (allMembers || []).find(
+        m => (m.user_email || '').toLowerCase() === userEmailLower
+      );
+
+      if (!myMembership) {
+        setAccessError("You don't have access to this campaign. Ask your DM for an invite link.");
+        setLoading(false);
+        return;
+      }
+
+      // 3. Fetch the campaign
+      const { data: camp } = await supabase
+        .from('campaigns')
+        .select('*')
+        .eq('id', campaignId)
+        .single();
+
+      if (!camp) {
+        setAccessError("This campaign no longer exists.");
+        setLoading(false);
+        return;
+      }
+      setCampaign(camp);
+
+      // Best-effort DM display name from email local part
+      // (we don't have a users/profiles table)
+      const dmEmail = camp.dm_email || '';
+      setDmName(dmEmail ? dmEmail.split('@')[0] : 'Your DM');
+
+      // 4. Build the party member list
+      //    Sources: (a) CE party_members linked via campaigns.party_id
+      //             (b) campaign_members (invite-joined players)
+      //             (c) manual_characters (DM-added stand-ins)
+      const charIdsToFetch = new Set();
+      const memberRecords = []; // { key, character_id, isMe }
+
+      if (camp.party_id) {
+        const { data: ceMembers } = await supabase
+          .from('party_members')
+          .select('*')
+          .eq('party_id', camp.party_id);
+
+        const dmEmailLower = (camp.dm_email || '').toLowerCase();
+        (ceMembers || []).forEach(m => {
+          if (m.role === 'dm' || !m.character_id) return;
+          const memberEmail = (m.user_email || m.email || '').toLowerCase();
+          if (memberEmail && memberEmail === dmEmailLower) return;
+          if (charIdsToFetch.has(m.character_id)) return;
+          charIdsToFetch.add(m.character_id);
+          memberRecords.push({
+            key: `ce-${m.id}`,
+            character_id: m.character_id,
+            isMe: m.character_id === myMembership.character_id,
+          });
+        });
+      }
+
+      // Invite-joined members
+      (allMembers || []).forEach(m => {
+        if (!m.character_id || charIdsToFetch.has(m.character_id)) return;
+        charIdsToFetch.add(m.character_id);
+        memberRecords.push({
+          key: `inv-${m.id}`,
+          character_id: m.character_id,
+          isMe: m.character_id === myMembership.character_id,
+        });
+      });
+
+      // Fetch all character_data in one query
+      const charMap = {};
+      if (charIdsToFetch.size > 0) {
+        const { data: charRows } = await supabase
+          .from('characters')
+          .select('id, character_data')
+          .in('id', [...charIdsToFetch]);
+        (charRows || []).forEach(c => {
+          const cd = typeof c.character_data === 'string'
+            ? JSON.parse(c.character_data)
+            : c.character_data;
+          charMap[c.id] = cd;
+        });
+      }
+
+      // Stash my own character_data for the header
+      if (myMembership.character_id && charMap[myMembership.character_id]) {
+        setMyCharacterData(charMap[myMembership.character_id]);
+      }
+
+      // Manual characters (DM-added)
+      const { data: manualData } = await supabase
+        .from('manual_characters')
+        .select('*')
+        .eq('campaign_id', campaignId)
+        .order('created_at');
+
+      const cePartyList = memberRecords
+        .map(m => ({
+          kind: 'character',
+          key: m.key,
+          isMe: m.isMe,
+          character: charMap[m.character_id] || null,
+        }))
+        .filter(m => m.character);
+
+      const manualPartyList = (manualData || []).map(mc => ({
+        kind: 'manual',
+        key: `man-${mc.id}`,
+        isMe: false,
+        character: {
+          name: mc.name,
+          class: mc.class,
+          level: mc.level,
+          race: mc.race,
+          ac: mc.ac,
+          currentHp: mc.hp,
+          maxHp: mc.max_hp,
+        },
+        manualPp: mc.pp,
+      }));
+
+      // "Me" first, then everyone else
+      const sortedParty = [...cePartyList, ...manualPartyList].sort((a, b) => {
+        if (a.isMe && !b.isMe) return -1;
+        if (b.isMe && !a.isMe) return 1;
+        return 0;
+      });
+      setPartyMembers(sortedParty);
+
+      // 5. Session recaps — only player_visible
+      const { data: notesData } = await supabase
+        .from('session_notes')
+        .select('*')
+        .eq('campaign_id', campaignId)
+        .eq('player_visible', true)
+        .order('session_number', { ascending: true });
+      setSessionRecaps(notesData || []);
+
+      // 6. Shared gallery images
+      const { data: imagesData } = await supabase
+        .from('campaign_images')
+        .select('*')
+        .eq('campaign_id', campaignId)
+        .eq('shared_with_players', true)
+        .order('created_at', { ascending: false });
+      setSharedImages(imagesData || []);
+
+      // 7. NPCs the players have met (player_visible defaults to true server-side)
+      const { data: npcData } = await supabase
+        .from('npcs')
+        .select('*')
+        .eq('campaign_id', campaignId)
+        .eq('player_visible', true)
+        .order('name', { ascending: true });
+      setNpcs(npcData || []);
+
+      setLoading(false);
+    }
+
+    load();
+  }, [user?.email, campaignId]);
+
+  // ─── Render: loading ────────────────────────────────────────
+  if (authLoading || (loading && !accessError)) {
+    return (
+      <div className="dm-study-bg min-h-screen flex items-center justify-center">
+        <Loader2 className="w-8 h-8 text-eg4h-gold animate-spin relative z-10" />
+      </div>
+    );
+  }
+
+  // ─── Render: access error ──────────────────────────────────
+  if (accessError) {
+    return (
+      <div className="dm-study-bg min-h-screen flex items-center justify-center px-4">
+        <div className="dm-panel-raised border rounded-xl p-8 max-w-md text-center relative z-10">
+          <ScrollText className="w-12 h-12 text-domain-text-dim/40 mx-auto mb-4" />
+          <h2 className="font-cinzel text-lg text-domain-text mb-2">Access Restricted</h2>
+          <p className="font-crimson text-domain-text-dim mb-5">{accessError}</p>
+          <button
+            onClick={() => navigate('/')}
+            className="px-4 py-2 text-xs font-cinzel font-semibold text-eg4h-black bg-gradient-to-r from-eg4h-gold to-eg4h-gold-light rounded-lg hover:shadow-[0_2px_10px_rgba(255,215,0,0.3)] transition-all cursor-pointer"
+          >
+            Back to Home
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!campaign) return null;
+
+  const myStats = parsePlayerCharStats(myCharacterData, true);
+  const statsVisible = !!campaign.player_stats_visible;
+
+  return (
+    <div className="dm-study-bg min-h-screen">
+      {/* Header */}
+      <header className="border-b border-domain-panel-border/60 bg-domain-dark/90 backdrop-blur-sm sticky top-0 z-20 dm-header-glow relative">
+        <div className="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3 min-w-0">
+            <img src="/dmd-logo.png" alt="DMD" className="w-10 h-10 shrink-0" />
+            <div className="min-w-0">
+              <h1 className="font-cinzel text-lg sm:text-xl text-eg4h-gold font-semibold truncate">
+                {campaign.name}
+              </h1>
+              <p className="text-[10px] font-ui text-domain-text-dim uppercase tracking-widest">
+                Player View
+              </p>
+            </div>
+          </div>
+          <div className="text-right shrink-0 hidden sm:block">
+            <p className="text-xs font-ui text-domain-text-dim">
+              DM: <span className="text-domain-text">{dmName}</span>
+            </p>
+            {myStats.name !== 'Unknown' && (
+              <p className="text-xs font-ui text-domain-text-dim">
+                Playing as: <span className="text-eg4h-gold">{myStats.name}</span>
+              </p>
+            )}
+          </div>
+        </div>
+      </header>
+
+      <main className="max-w-5xl mx-auto px-4 sm:px-6 py-8 relative z-10 space-y-10">
+        {/* Mobile-only DM/Playing as */}
+        <div className="sm:hidden text-xs font-ui text-domain-text-dim space-y-0.5 -mt-2">
+          <p>DM: <span className="text-domain-text">{dmName}</span></p>
+          {myStats.name !== 'Unknown' && (
+            <p>Playing as: <span className="text-eg4h-gold">{myStats.name}</span></p>
+          )}
+        </div>
+
+        {/* Campaign description */}
+        {campaign.description && (
+          <p className="font-crimson text-domain-text-dim italic text-sm leading-relaxed">
+            {campaign.description}
+          </p>
+        )}
+
+        {/* Your Party */}
+        <section>
+          <h2 className="font-cinzel text-lg text-domain-text mb-3 flex items-center gap-2">
+            <Users className="w-4 h-4" /> Your Party
+          </h2>
+          {partyMembers.length === 0 ? (
+            <p className="text-sm font-crimson text-domain-text-dim/60 italic">
+              No party members yet.
+            </p>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+              {partyMembers.map(m => {
+                const stats = parsePlayerCharStats(m.character, statsVisible);
+                return (
+                  <div
+                    key={m.key}
+                    className={`dm-panel border rounded-lg p-3 ${m.isMe ? 'border-eg4h-gold-dark/50' : ''}`}
+                  >
+                    <div className="flex items-start gap-3">
+                      {stats.portrait ? (
+                        <img
+                          src={stats.portrait}
+                          alt={stats.name}
+                          className="w-12 h-12 rounded-lg object-cover border border-domain-panel-border/40 shrink-0"
+                        />
+                      ) : (
+                        <div className="w-12 h-12 rounded-lg bg-domain-warm/20 border border-domain-panel-border/40 flex items-center justify-center text-eg4h-gold font-cinzel text-lg font-semibold shrink-0">
+                          {stats.name.charAt(0)}
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <p className="font-cinzel text-sm text-domain-text truncate">
+                            {stats.name}
+                          </p>
+                          {m.isMe && (
+                            <span className="text-[9px] font-ui text-eg4h-gold/80 uppercase tracking-wider shrink-0">
+                              you
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs font-ui text-domain-text-dim truncate">
+                          {[stats.race, stats.charClass].filter(Boolean).join(' ')}
+                          {stats.level ? ` ${stats.level}` : ''}
+                        </p>
+                        {statsVisible && (
+                          <div className="flex flex-wrap gap-x-2 gap-y-0.5 mt-1.5 text-[10px] font-ui text-domain-text-dim">
+                            {stats.ac != null && (
+                              <span className="flex items-center gap-0.5">
+                                <Shield className="w-2.5 h-2.5" /> {stats.ac}
+                              </span>
+                            )}
+                            {stats.hp != null && (
+                              <span className="flex items-center gap-0.5">
+                                <Heart className="w-2.5 h-2.5" />
+                                {stats.hp}{stats.maxHp ? `/${stats.maxHp}` : ''}
+                              </span>
+                            )}
+                            {(m.manualPp ?? stats.pp) != null && (
+                              <span className="flex items-center gap-0.5">
+                                <Eye className="w-2.5 h-2.5" /> {m.manualPp ?? stats.pp}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
+
+        {/* Session Recaps */}
+        <section>
+          <h2 className="font-cinzel text-lg text-domain-text mb-3 flex items-center gap-2">
+            <Scroll className="w-4 h-4" /> Adventure Log
+          </h2>
+          {sessionRecaps.length === 0 ? (
+            <p className="text-sm font-crimson text-domain-text-dim/60 italic">
+              No session recaps shared yet. Your DM will post them after sessions.
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {sessionRecaps.map(note => {
+                let summary = null;
+                if (note.ai_summary) {
+                  try {
+                    summary = typeof note.ai_summary === 'string'
+                      ? JSON.parse(note.ai_summary)
+                      : note.ai_summary;
+                  } catch { /* ignore */ }
+                }
+                return (
+                  <article key={note.id} className="dm-panel border rounded-lg p-4">
+                    <div className="flex items-baseline justify-between gap-3 mb-2">
+                      <h3 className="font-cinzel text-sm text-eg4h-gold">
+                        {note.title || `Session ${note.session_number}`}
+                      </h3>
+                      {note.created_at && (
+                        <span className="text-[10px] font-ui text-domain-text-dim/60 shrink-0">
+                          {new Date(note.created_at).toLocaleDateString()}
+                        </span>
+                      )}
+                    </div>
+                    {summary?.narrative_summary ? (
+                      <p className="text-sm font-crimson text-domain-text-dim italic whitespace-pre-wrap leading-relaxed">
+                        {summary.narrative_summary}
+                      </p>
+                    ) : note.raw_notes ? (
+                      <p className="text-sm font-crimson text-domain-text-dim whitespace-pre-wrap leading-relaxed">
+                        {note.raw_notes}
+                      </p>
+                    ) : (
+                      <p className="text-xs font-crimson text-domain-text-dim/40 italic">
+                        No content yet.
+                      </p>
+                    )}
+                  </article>
+                );
+              })}
+            </div>
+          )}
+        </section>
+
+        {/* Shared Images */}
+        <section>
+          <h2 className="font-cinzel text-lg text-domain-text mb-3 flex items-center gap-2">
+            <ImageIcon className="w-4 h-4" /> From Your DM
+          </h2>
+          {sharedImages.length === 0 ? (
+            <p className="text-sm font-crimson text-domain-text-dim/60 italic">
+              Your DM hasn't shared any images yet. They'll appear here during sessions.
+            </p>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+              {sharedImages.map(img => (
+                <button
+                  key={img.id}
+                  type="button"
+                  onClick={() => setPreviewImage({ url: img.image_url, caption: img.caption })}
+                  className="group relative cursor-pointer text-left"
+                >
+                  <img
+                    src={img.image_url}
+                    alt={img.caption || 'Campaign image'}
+                    className="w-full aspect-square object-cover rounded-lg border border-domain-panel-border/40 group-hover:border-domain-amber/40 transition-colors"
+                  />
+                  {img.caption && (
+                    <p className="text-[10px] font-crimson text-domain-text-dim/70 truncate mt-1">
+                      {img.caption}
+                    </p>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
+        </section>
+
+        {/* People You've Met (NPCs) */}
+        <section>
+          <h2 className="font-cinzel text-lg text-domain-text mb-3 flex items-center gap-2">
+            <Users className="w-4 h-4" /> People You've Met
+          </h2>
+          {npcs.length === 0 ? (
+            <p className="text-sm font-crimson text-domain-text-dim/60 italic">
+              You haven't met anyone notable yet.
+            </p>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {npcs.map(npc => (
+                <div key={npc.id} className="dm-panel border rounded-lg p-3">
+                  <div className="flex items-start gap-3">
+                    {npc.image_url ? (
+                      <img
+                        src={npc.image_url}
+                        alt={npc.name}
+                        onClick={() => setPreviewImage({ url: npc.image_url, caption: npc.name })}
+                        className="w-11 h-11 rounded-lg object-cover border border-domain-panel-border/40 shrink-0 cursor-pointer"
+                      />
+                    ) : (
+                      <div className="w-11 h-11 rounded-lg bg-domain-warm/20 border border-domain-panel-border/40 flex items-center justify-center text-eg4h-gold/70 font-cinzel font-semibold shrink-0">
+                        {npc.name.charAt(0)}
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="font-cinzel text-sm text-domain-text">{npc.name}</p>
+                      {npc.role && (
+                        <p className="text-xs font-crimson text-domain-parchment-dark">
+                          {npc.role}
+                        </p>
+                      )}
+                      {npc.location && (
+                        <p className="text-[11px] font-crimson text-domain-text-dim/70 mt-0.5 flex items-center gap-1">
+                          <MapPin className="w-2.5 h-2.5 shrink-0" /> {npc.location}
+                        </p>
+                      )}
+                      {npc.personality && (
+                        <p className="text-[11px] font-crimson text-domain-text-dim/60 italic mt-1 line-clamp-3">
+                          {npc.personality}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      </main>
+
+      {/* Image preview modal */}
+      {previewImage && (
+        <div
+          className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-6"
+          onClick={() => setPreviewImage(null)}
+        >
+          <button
+            onClick={() => setPreviewImage(null)}
+            className="absolute top-4 right-4 text-domain-text-dim hover:text-eg4h-gold cursor-pointer"
+            title="Close"
+          >
+            <X className="w-6 h-6" />
+          </button>
+          <div className="max-w-4xl max-h-full" onClick={e => e.stopPropagation()}>
+            <img
+              src={previewImage.url}
+              alt={previewImage.caption || ''}
+              className="max-w-full max-h-[80vh] object-contain rounded-lg"
+            />
+            {previewImage.caption && (
+              <p className="text-sm font-crimson text-domain-text-dim text-center mt-3">
+                {previewImage.caption}
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
