@@ -17,10 +17,12 @@ const FEATURES = [
 export default function UpgradeModal({ onClose, reason }) {
   const { user } = useAuth();
   const [loading, setLoading] = useState(null); // 'dm' | 'bundle' | null
+  const [error, setError] = useState(null);
 
   const handleCheckout = async (plan) => {
     if (!user?.email || loading) return;
     setLoading(plan);
+    setError(null);
 
     try {
       const res = await fetch('/.netlify/functions/create-checkout', {
@@ -37,11 +39,13 @@ export default function UpgradeModal({ onClose, reason }) {
       if (data.url) {
         window.location.href = data.url;
       } else {
-        console.error('Checkout error:', data.error);
+        console.error('Checkout error:', data.error || data);
+        setError(data.error || 'Failed to create checkout session. Please try again.');
         setLoading(null);
       }
     } catch (err) {
       console.error('Checkout error:', err);
+      setError('Network error — please check your connection and try again.');
       setLoading(null);
     }
   };
@@ -114,6 +118,12 @@ export default function UpgradeModal({ onClose, reason }) {
             )}
           </button>
         </div>
+
+        {error && (
+          <div className="mt-3 px-3 py-2 bg-red-900/20 border border-red-500/30 rounded-lg">
+            <p className="text-xs font-crimson text-red-300">{error}</p>
+          </div>
+        )}
 
         <p className="text-center text-[10px] font-ui text-domain-text-dim/60 mt-3">
           Cancel anytime. Bundle includes Character Evolver Adventurer + DM's Domain Dungeon Master.

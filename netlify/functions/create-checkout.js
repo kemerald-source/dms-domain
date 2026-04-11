@@ -35,13 +35,13 @@ export async function handler(event) {
   }
 
   try {
-    // Check if customer already exists
-    const custSearchRes = await fetch(
-      `https://api.stripe.com/v1/customers/search?query=email:'${encodeURIComponent(email)}'`,
+    // Check if customer already exists (use list endpoint — more reliable than search)
+    const custListRes = await fetch(
+      `https://api.stripe.com/v1/customers?email=${encodeURIComponent(email)}&limit=1`,
       { headers: { Authorization: `Bearer ${stripeKey}` } }
     );
-    const custSearchData = await custSearchRes.json();
-    let customerId = custSearchData.data?.[0]?.id;
+    const custListData = await custListRes.json();
+    let customerId = custListData.data?.[0]?.id;
 
     // Create customer if not found
     if (!customerId) {
@@ -51,8 +51,14 @@ export async function handler(event) {
         body: `email=${encodeURIComponent(email)}`,
       });
       const createData = await createRes.json();
+      if (createData.error) {
+        console.error('Stripe customer create error:', createData.error);
+        return { statusCode: 400, headers: corsHeaders, body: JSON.stringify({ error: createData.error.message }) };
+      }
       customerId = createData.id;
     }
+
+    console.log(`[create-checkout] Plan: ${plan}, Price: ${priceId}, Customer: ${customerId}`);
 
     // Create checkout session
     const params = new URLSearchParams({
