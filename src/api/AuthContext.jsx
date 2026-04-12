@@ -44,9 +44,13 @@ function cleanupIdentityWidget() {
     }
   }
 
-  ['overflow', 'position', 'pointerEvents', 'touchAction', 'userSelect'].forEach(prop => {
-    if (document.body.style[prop]) document.body.style[prop] = '';
-  });
+  // Force-clear any body styles that block interaction
+  document.body.style.overflow = '';
+  document.body.style.position = '';
+  document.body.style.pointerEvents = '';
+  document.body.style.touchAction = '';
+  document.body.style.userSelect = '';
+  document.body.removeAttribute('style');
 }
 
 function clearAuthStorage() {
@@ -114,12 +118,12 @@ export function AuthProvider({ children }) {
 
       identity.on('login', (loginUser) => {
         setUserWithRetry(loginUser);
-        identity.close();
+        try { identity.close(); } catch { /* ignore */ }
         cleanupIdentityWidget();
-
-        if (window.innerWidth < 1024) {
-          setTimeout(() => window.location.reload(), 500);
-        }
+        // Repeated cleanup passes — the widget sometimes injects elements after close()
+        setTimeout(cleanupIdentityWidget, 200);
+        setTimeout(cleanupIdentityWidget, 600);
+        setTimeout(cleanupIdentityWidget, 1500);
       });
 
       identity.on('logout', () => { setUser(null); clearAuthStorage(); });
@@ -137,7 +141,7 @@ export function AuthProvider({ children }) {
     setUser(null);
     clearAuthStorage();
     cleanupIdentityWidget();
-    // Hard redirect — guarantees a clean state regardless of widget quirks
+    // Hard redirect — clears all state without triggering OAuth sign-out flow
     window.location.href = '/';
   };
 
