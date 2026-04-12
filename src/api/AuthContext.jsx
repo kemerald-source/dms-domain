@@ -135,11 +135,10 @@ export function AuthProvider({ children }) {
 
   const logout = () => {
     setUser(null);
-    if (netlifyIdentity) {
-      try { netlifyIdentity.logout(); } catch (e) { console.warn('[Auth] Widget logout error:', e); }
-    }
-    setTimeout(clearAuthStorage, 100);
-    setTimeout(clearAuthStorage, 2000);
+    clearAuthStorage();
+    cleanupIdentityWidget();
+    // Hard redirect — guarantees a clean state regardless of widget quirks
+    window.location.href = '/';
   };
 
   return (
