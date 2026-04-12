@@ -18,7 +18,7 @@ export default function Landing() {
     if (isAuthenticated) {
       navigate('/dashboard');
     } else {
-      login(() => navigate('/dashboard'));
+      navigate('/demo');
     }
   };
 
