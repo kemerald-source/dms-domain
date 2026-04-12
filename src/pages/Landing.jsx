@@ -14,6 +14,14 @@ export default function Landing() {
     }
   }, [loading, isAuthenticated, navigate]);
 
+  // Strip leftover OAuth hash fragments (#access_token=...) so the widget
+  // cannot re-authenticate from a stale token after the user has logged out.
+  useEffect(() => {
+    if (window.location.hash && window.location.hash.includes('access_token')) {
+      window.history.replaceState(null, '', window.location.pathname);
+    }
+  }, []);
+
   const handleCTA = () => {
     if (isAuthenticated) {
       navigate('/dashboard');
