@@ -3,6 +3,8 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 const AuthContext = createContext(null);
 
 let netlifyIdentity = null;
+let widgetInitialized = false;
+let widgetListenersBound = false;
 
 function loadIdentityWidget() {
   return new Promise((resolve) => {
@@ -17,9 +19,13 @@ function loadIdentityWidget() {
 }
 
 function cleanupIdentityWidget() {
+  // Remove ALL widget iframes — the widget can inject duplicates, and !important
+  // styles mean hiding via removeAttribute('style') won't work. Only removal does.
+  document.querySelectorAll(
+    'iframe[id="netlify-identity-widget"], iframe[title="Netlify identity widget"], iframe[src*="identity.netlify.com"]'
+  ).forEach(el => el.remove());
   document.querySelectorAll('[class*="netlify-identity"]').forEach(el => el.remove());
-  const container = document.getElementById('netlify-identity-widget');
-  if (container) container.remove();
+  document.querySelectorAll('[id="netlify-identity-widget"]').forEach(el => el.remove());
 
   document.querySelectorAll('style').forEach(el => {
     const text = el.textContent || '';
@@ -100,7 +106,12 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     loadIdentityWidget().then((identity) => {
-      identity.init();
+      // Guard against double-init — StrictMode runs effects twice in dev,
+      // and each init() call injects another widget iframe.
+      if (!widgetInitialized) {
+        identity.init();
+        widgetInitialized = true;
+      }
 
       // Retry reading user metadata if initial data is incomplete
       const setUserWithRetry = (netlifyUser) => {
@@ -125,26 +136,31 @@ export function AuthProvider({ children }) {
       const currentUser = identity.currentUser();
       if (currentUser) setUserWithRetry(currentUser);
 
-      identity.on('init', (initUser) => {
-        if (initUser) {
-          setUserWithRetry(initUser);
+      // Guard listener binding too — StrictMode re-runs effects and would
+      // otherwise register each handler twice, firing login/logout twice.
+      if (!widgetListenersBound) {
+        identity.on('init', (initUser) => {
+          if (initUser) {
+            setUserWithRetry(initUser);
+            cleanupIdentityWidget();
+          }
+          setLoading(false);
+        });
+
+        identity.on('login', (loginUser) => {
+          setUserWithRetry(loginUser);
+          try { identity.close(); } catch { /* ignore */ }
           cleanupIdentityWidget();
-        }
-        setLoading(false);
-      });
+          // Repeated cleanup passes — the widget sometimes injects elements after close()
+          setTimeout(cleanupIdentityWidget, 200);
+          setTimeout(cleanupIdentityWidget, 600);
+          setTimeout(cleanupIdentityWidget, 1500);
+        });
 
-      identity.on('login', (loginUser) => {
-        setUserWithRetry(loginUser);
-        try { identity.close(); } catch { /* ignore */ }
-        cleanupIdentityWidget();
-        // Repeated cleanup passes — the widget sometimes injects elements after close()
-        setTimeout(cleanupIdentityWidget, 200);
-        setTimeout(cleanupIdentityWidget, 600);
-        setTimeout(cleanupIdentityWidget, 1500);
-      });
-
-      identity.on('logout', () => { setUser(null); clearAuthStorage(); });
-      identity.on('error', (err) => console.error('Auth error:', err));
+        identity.on('logout', () => { setUser(null); clearAuthStorage(); });
+        identity.on('error', (err) => console.error('Auth error:', err));
+        widgetListenersBound = true;
+      }
 
       setTimeout(() => setLoading(false), 2000);
     });
