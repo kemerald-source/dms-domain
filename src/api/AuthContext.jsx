@@ -55,7 +55,6 @@ function cleanupIdentityWidget() {
 
 function clearAuthStorage() {
   try {
-    localStorage.removeItem('gotrue.user');
     const keysToRemove = [];
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
@@ -63,6 +62,24 @@ function clearAuthStorage() {
     }
     keysToRemove.forEach(key => localStorage.removeItem(key));
   } catch { /* localStorage not available */ }
+  try {
+    for (let i = 0; i < sessionStorage.length; i++) {
+      const key = sessionStorage.key(i);
+      if (key && (key.startsWith('gotrue') || key.startsWith('netlify'))) sessionStorage.removeItem(key);
+    }
+  } catch { /* sessionStorage not available */ }
+  try {
+    const cookieNames = ['nf_jwt', 'gotrue.user'];
+    const paths = ['/', ''];
+    const domains = ['', `; domain=${window.location.hostname}`, `; domain=.${window.location.hostname}`];
+    cookieNames.forEach(name => {
+      paths.forEach(path => {
+        domains.forEach(domain => {
+          document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT${path ? `; path=${path}` : ''}${domain}`;
+        });
+      });
+    });
+  } catch { /* cookies not available */ }
 }
 
 function normalizeUser(netlifyUser) {
@@ -139,10 +156,27 @@ export function AuthProvider({ children }) {
 
   const logout = () => {
     setUser(null);
+
+    // Unbind all widget event listeners BEFORE clearing — prevents the widget
+    // from re-triggering its own logout flow (which would redirect to Google).
+    try {
+      const identity = window.netlifyIdentity;
+      if (identity && typeof identity.off === 'function') {
+        ['login', 'logout', 'init', 'error', 'open', 'close'].forEach(evt => {
+          try { identity.off(evt); } catch { /* ignore */ }
+        });
+      }
+    } catch { /* ignore */ }
+
     clearAuthStorage();
     cleanupIdentityWidget();
-    // Hard redirect — clears all state without triggering OAuth sign-out flow
-    window.location.href = '/';
+
+    // Destroy the widget instance entirely so nothing can call GoTrue endpoints
+    try { window.netlifyIdentity = null; } catch { /* ignore */ }
+    netlifyIdentity = null;
+
+    // replace() — no back-button return to the authenticated state
+    window.location.replace('/');
   };
 
   return (
