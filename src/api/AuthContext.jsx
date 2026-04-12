@@ -69,10 +69,12 @@ function clearAuthStorage() {
     keysToRemove.forEach(key => localStorage.removeItem(key));
   } catch { /* localStorage not available */ }
   try {
+    const sessionKeysToRemove = [];
     for (let i = 0; i < sessionStorage.length; i++) {
       const key = sessionStorage.key(i);
-      if (key && (key.startsWith('gotrue') || key.startsWith('netlify'))) sessionStorage.removeItem(key);
+      if (key && (key.startsWith('gotrue') || key.startsWith('netlify'))) sessionKeysToRemove.push(key);
     }
+    sessionKeysToRemove.forEach(key => sessionStorage.removeItem(key));
   } catch { /* sessionStorage not available */ }
   try {
     const cookieNames = ['nf_jwt', 'gotrue.user'];
@@ -170,11 +172,36 @@ export function AuthProvider({ children }) {
     window.location.href = '/.netlify/identity/authorize?provider=google&prompt=select_account';
   };
 
-  const logout = () => {
+  const logout = async () => {
     setUser(null);
 
-    // Unbind all widget event listeners BEFORE clearing — prevents the widget
-    // from re-triggering its own logout flow (which would redirect to Google).
+    // 1. Grab the token BEFORE we tear anything down — we need it to revoke
+    //    the server-side GoTrue session.
+    let token = null;
+    try {
+      const identity = window.netlifyIdentity;
+      const cu = identity?.currentUser?.();
+      token = cu?.token?.access_token;
+      // If the token getter is async (refreshes expired JWTs), try that too
+      if (!token && cu?.jwt) {
+        try { token = await cu.jwt(true); } catch { /* ignore */ }
+      }
+    } catch { /* ignore */ }
+
+    // 2. Revoke the session on the GoTrue server. Without this the server
+    //    still considers the session valid and the widget will auto-login
+    //    the user on next page load.
+    if (token) {
+      try {
+        await fetch('/.netlify/identity/logout', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` },
+        });
+      } catch { /* network error — proceed with client-side cleanup */ }
+    }
+
+    // 3. Unbind all widget event listeners — prevents the widget from
+    //    re-triggering its own logout flow (which would redirect to Google).
     try {
       const identity = window.netlifyIdentity;
       if (identity && typeof identity.off === 'function') {
@@ -184,12 +211,15 @@ export function AuthProvider({ children }) {
       }
     } catch { /* ignore */ }
 
+    // 4. Wipe every client-side auth artifact
     clearAuthStorage();
     cleanupIdentityWidget();
 
-    // Destroy the widget instance entirely so nothing can call GoTrue endpoints
+    // 5. Destroy the widget instance entirely so nothing can call GoTrue endpoints
     try { window.netlifyIdentity = null; } catch { /* ignore */ }
     netlifyIdentity = null;
+    widgetInitialized = false;
+    widgetListenersBound = false;
 
     // replace() — no back-button return to the authenticated state
     window.location.replace('/');
