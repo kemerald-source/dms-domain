@@ -250,10 +250,10 @@ export const SHATTERED_CROWN = {
   ],
 
   gallery: [
-    { id: 'g1', caption: 'Map of Thorne and the Seven Districts', tag: 'map' },
-    { id: 'g2', caption: 'The Shattered Crown — royal emblem', tag: 'handout' },
-    { id: 'g3', caption: 'Archduchess Morrigan — portrait', tag: 'portrait' },
-    { id: 'g4', caption: 'The Gilded Gryphon — interior', tag: 'location' },
+    { id: 'g1', caption: 'Map of Thorne and the Seven Districts', tag: 'map', src: '/Demo-Map%20of%20Thorne.jpg' },
+    { id: 'g2', caption: 'The Shattered Crown — royal emblem', tag: 'handout', src: '/Demo-%20shattered%20crown.png' },
+    { id: 'g3', caption: 'Archduchess Morrigan — portrait', tag: 'portrait', src: '/Demo-%20Archduchess%20Morrigan.png' },
+    { id: 'g4', caption: 'The Gilded Gryphon — interior', tag: 'location', src: '/Demo-%20Gilded%20Gryphon.png' },
   ],
 
   dmNotes: [

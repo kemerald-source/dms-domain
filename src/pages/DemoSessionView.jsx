@@ -359,10 +359,24 @@ export default function DemoSessionView() {
         </SectionHeader>
         <div className="grid grid-cols-2 gap-2">
           {demo.gallery.map(g => (
-            <div key={g.id} className="dm-panel-raised border rounded-lg aspect-video flex flex-col items-center justify-center p-2 text-center">
-              <ImageIcon className="w-5 h-5 text-domain-text-dim/50 mb-1" />
-              <p className="text-[11px] font-crimson text-domain-text leading-tight">{g.caption}</p>
-              <p className="text-[9px] font-ui text-domain-text-dim/60 uppercase tracking-wider mt-1">{g.tag}</p>
+            <div key={g.id} className="dm-panel-raised border rounded-lg overflow-hidden group">
+              <div className="aspect-video bg-domain-panel/50 relative overflow-hidden">
+                {g.src ? (
+                  <img
+                    src={g.src}
+                    alt={g.caption}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center">
+                    <ImageIcon className="w-5 h-5 text-domain-text-dim/50" />
+                  </div>
+                )}
+              </div>
+              <div className="p-2 text-center">
+                <p className="text-[11px] font-crimson text-domain-text leading-tight">{g.caption}</p>
+                <p className="text-[9px] font-ui text-domain-text-dim/60 uppercase tracking-wider mt-1">{g.tag}</p>
+              </div>
             </div>
           ))}
         </div>
