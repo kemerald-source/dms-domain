@@ -9,6 +9,7 @@ import {
 import { useAuth } from '@/api/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { SHATTERED_CROWN as demo } from '@/demo/shatteredCrown';
+import Lightbox from '@/components/Lightbox';
 
 const TABS = [
   { key: 'left', label: 'NPCs & Journal', icon: BookOpen },
@@ -110,6 +111,7 @@ export default function DemoSessionView() {
   const [expandedLore, setExpandedLore] = useState(null);
   const [expandedDmNote, setExpandedDmNote] = useState(null);
   const [improvInput, setImprovInput] = useState('');
+  const [lightbox, setLightbox] = useState(null);
 
   // SRD (free content, fetched live)
   const [srdRef, setSrdRef] = useState({});
@@ -359,14 +361,23 @@ export default function DemoSessionView() {
         </SectionHeader>
         <div className="grid grid-cols-2 gap-2">
           {demo.gallery.map(g => (
-            <div key={g.id} className="dm-panel-raised border rounded-lg overflow-hidden group">
+            <button
+              key={g.id}
+              onClick={() => g.src && setLightbox({ src: g.src, alt: g.caption })}
+              className="dm-panel-raised border rounded-lg overflow-hidden group text-left cursor-zoom-in hover:border-eg4h-gold-dark/60 transition-colors"
+            >
               <div className="aspect-video bg-domain-panel/50 relative overflow-hidden">
                 {g.src ? (
-                  <img
-                    src={g.src}
-                    alt={g.caption}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                  />
+                  <>
+                    <img
+                      src={g.src}
+                      alt={g.caption}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    />
+                    <div className="absolute bottom-1 right-1 px-1.5 py-0.5 rounded bg-domain-bg/80 backdrop-blur-sm border border-domain-panel-border text-domain-text-dim font-ui text-[9px] uppercase tracking-wider opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                      Enlarge
+                    </div>
+                  </>
                 ) : (
                   <div className="w-full h-full flex items-center justify-center">
                     <ImageIcon className="w-5 h-5 text-domain-text-dim/50" />
@@ -377,7 +388,7 @@ export default function DemoSessionView() {
                 <p className="text-[11px] font-crimson text-domain-text leading-tight">{g.caption}</p>
                 <p className="text-[9px] font-ui text-domain-text-dim/60 uppercase tracking-wider mt-1">{g.tag}</p>
               </div>
-            </div>
+            </button>
           ))}
         </div>
       </div>
@@ -602,6 +613,8 @@ export default function DemoSessionView() {
           {activeTab === 'right' && RightPanel}
         </div>
       </div>
+
+      <Lightbox src={lightbox?.src} alt={lightbox?.alt} onClose={() => setLightbox(null)} />
 
       {signupPrompt && (
         <SignupModal
