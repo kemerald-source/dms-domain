@@ -165,6 +165,18 @@ export default function Landing() {
     }
   }, [loading, isAuthenticated, navigate]);
 
+  // Handle regular anchor hashes (e.g. /#pricing from the demo CTA).
+  // Native scroll-to-id doesn't fire when the hash arrives via SPA navigation.
+  useEffect(() => {
+    const hash = window.location.hash;
+    if (!hash || /^#(?:access_token|id_token|refresh_token|error|error_description)=/.test(hash)) return;
+    const id = hash.slice(1);
+    const el = document.getElementById(id);
+    if (el) {
+      setTimeout(() => el.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+    }
+  }, []);
+
   // Sticky CTA appears once the user scrolls past the hero (~viewport height).
   useEffect(() => {
     const onScroll = () => setShowStickyBar(window.scrollY > window.innerHeight * 0.85);

@@ -2,21 +2,21 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  BookOpen, Users, Scroll, Sparkles, Globe, ChevronRight, ChevronDown,
-  BookMarked, Lock, Plus, Swords, Shield, Heart, Eye, Dices,
-  ImageIcon, FileText, MapPin, UserPlus, Layers,
+  BookOpen, Users, Scroll, Sparkles, Globe, ChevronRight,
+  BookMarked, Lock, Plus, Swords, Eye, Dices,
+  ImageIcon, FileText, UserPlus, Crown,
 } from 'lucide-react';
 import { useAuth } from '@/api/AuthContext';
 import { supabase } from '@/lib/supabase';
+import { SHATTERED_CROWN as demo } from '@/demo/shatteredCrown';
 
-// ─── Tab selector for mobile ────────────────────────────────────
 const TABS = [
   { key: 'left', label: 'NPCs & Journal', icon: BookOpen },
   { key: 'center', label: 'Plot & Lore', icon: Scroll },
   { key: 'right', label: 'Party & Initiative', icon: Users },
 ];
 
-// ─── Reusable section header ────────────────────────────────────
+// ─── Reusable bits ──────────────────────────────────────────────
 function SectionHeader({ icon: Icon, title, children }) {
   return (
     <div className="flex items-center justify-between mb-3">
@@ -28,48 +28,68 @@ function SectionHeader({ icon: Icon, title, children }) {
   );
 }
 
-// ─── Card wrapper ───────────────────────────────────────────────
-function Card({ children, className = '' }) {
+function Card({ children, className = '', onClick }) {
   return (
-    <div className={`dm-panel-raised border rounded-lg p-3 ${className}`}>
+    <div
+      onClick={onClick}
+      className={`dm-panel-raised border rounded-lg p-3 ${onClick ? 'cursor-pointer hover:border-eg4h-gold-dark/60 transition-colors' : ''} ${className}`}
+    >
       {children}
     </div>
   );
 }
 
-// ─── Login prompt modal ─────────────────────────────────────────
-function LoginPrompt({ message, onClose, onLogin }) {
+function DmTierBadge({ onClick, label = 'DM Tier' }) {
+  return (
+    <button
+      onClick={onClick}
+      title="This feature requires a DM tier subscription — click for pricing"
+      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-eg4h-gold/10 border border-eg4h-gold/40 text-eg4h-gold font-ui text-[10px] uppercase tracking-wider hover:bg-eg4h-gold/20 transition-colors cursor-pointer"
+    >
+      <Crown className="w-2.5 h-2.5" /> {label}
+    </button>
+  );
+}
+
+// ─── Two-button signup modal ────────────────────────────────────
+function SignupModal({ message, onClose, onStartFree, onLogIn }) {
   return (
     <AnimatePresence>
       <motion.div
-        className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         onClick={onClose}
       >
         <motion.div
-          className="dm-panel-raised border border-domain-panel-border/60 rounded-xl p-6 max-w-sm mx-4 text-center"
+          className="dm-panel-raised border border-domain-panel-border/60 rounded-xl p-6 max-w-sm w-full text-center"
           initial={{ opacity: 0, scale: 0.9, y: 20 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.9, y: 20 }}
           onClick={e => e.stopPropagation()}
         >
           <Lock className="w-8 h-8 text-eg4h-gold mx-auto mb-3" />
-          <p className="font-cinzel text-base text-domain-text mb-2">Log in to Continue</p>
+          <p className="font-cinzel text-base text-domain-text mb-2">Save Your Campaign</p>
           <p className="font-crimson text-sm text-domain-text-dim mb-5">{message}</p>
-          <div className="flex gap-3 justify-center">
+          <div className="flex flex-col gap-2">
             <button
-              onClick={onLogin}
-              className="px-6 py-2 font-cinzel text-sm font-semibold text-eg4h-black bg-gradient-to-r from-eg4h-gold to-eg4h-gold-light rounded-lg shadow-[0_2px_12px_rgba(255,215,0,0.3)] hover:shadow-[0_4px_20px_rgba(255,215,0,0.5)] transition-all cursor-pointer"
+              onClick={onStartFree}
+              className="w-full px-6 py-2.5 font-cinzel text-sm font-semibold text-eg4h-black bg-gradient-to-r from-eg4h-gold to-eg4h-gold-light rounded-lg shadow-[0_2px_12px_rgba(255,215,0,0.3)] hover:shadow-[0_4px_20px_rgba(255,215,0,0.5)] transition-all cursor-pointer"
+            >
+              Start Free
+            </button>
+            <button
+              onClick={onLogIn}
+              className="w-full px-6 py-2.5 font-cinzel text-sm font-semibold text-eg4h-gold border-2 border-eg4h-gold-dark/60 rounded-lg hover:bg-eg4h-gold/10 transition-all cursor-pointer"
             >
               Log In
             </button>
             <button
               onClick={onClose}
-              className="px-4 py-2 font-ui text-sm text-domain-text-dim hover:text-domain-text cursor-pointer"
+              className="px-4 py-1 font-ui text-xs text-domain-text-dim hover:text-domain-text cursor-pointer"
             >
-              Keep Exploring
+              Keep exploring
             </button>
           </div>
         </motion.div>
@@ -79,24 +99,26 @@ function LoginPrompt({ message, onClose, onLogin }) {
 }
 
 // ═════════════════════════════════════════════════════════════════
-// DEMO SESSION VIEW
-// ═════════════════════════════════════════════════════════════════
 export default function DemoSessionView() {
   const navigate = useNavigate();
   const { isAuthenticated, login } = useAuth();
   const [activeTab, setActiveTab] = useState('left');
-  const [loginPrompt, setLoginPrompt] = useState(null);
+  const [signupPrompt, setSignupPrompt] = useState(null);
+  const [expandedNpc, setExpandedNpc] = useState(null);
+  const [expandedThread, setExpandedThread] = useState(null);
+  const [expandedSession, setExpandedSession] = useState(demo.sessions[0]?.id || null);
+  const [expandedLore, setExpandedLore] = useState(null);
+  const [expandedDmNote, setExpandedDmNote] = useState(null);
+  const [improvInput, setImprovInput] = useState('');
 
-  // SRD data (real — it's free SRD content)
+  // SRD (free content, fetched live)
   const [srdRef, setSrdRef] = useState({});
   const [expandedSrdCats, setExpandedSrdCats] = useState({});
 
-  // Redirect authenticated users to dashboard
   useEffect(() => {
     if (isAuthenticated) navigate('/dashboard', { replace: true });
   }, [isAuthenticated, navigate]);
 
-  // Fetch SRD entries
   useEffect(() => {
     if (!supabase) return;
     supabase
@@ -115,163 +137,237 @@ export default function DemoSessionView() {
       });
   }, []);
 
-  const handleLogin = () => {
-    login();
-  };
+  const promptSignup = (message) => setSignupPrompt(message);
+  const closePrompt = () => setSignupPrompt(null);
+  const handleStartFree = () => login();
+  const handleLogIn = () => login();
 
-  const promptLogin = (message) => {
-    setLoginPrompt(message);
-  };
+  // Scroll to pricing on the landing page.
+  const goToPricing = () => navigate('/#pricing');
 
-  // ─── Shared style classes ──────────────────────────────────────
   const inputClass = "w-full px-3 py-2 bg-[rgba(15,12,8,0.50)] border border-domain-panel-border/40 rounded-lg text-domain-text placeholder-domain-text-dim/60 focus:border-eg4h-gold-dark focus:outline-none font-crimson text-sm";
 
   // ═══════════════════════════════════════════════════════════════
-  // LEFT PANEL — NPCs & Session Journal (empty states)
+  // LEFT — Session Journal + NPCs
   // ═══════════════════════════════════════════════════════════════
   const LeftPanel = (
     <div className="flex flex-col gap-5 h-full">
-      {/* Session Journal */}
       <div>
-        <SectionHeader icon={BookOpen} title="Session Journal" />
-        <div className="flex items-center gap-1 mb-3">
+        <SectionHeader icon={BookOpen} title="Session Journal">
           <button
-            onClick={() => promptLogin('Create session notes to track your campaign story as it unfolds.')}
-            className="px-2.5 py-1 text-xs font-ui text-domain-amber border border-domain-panel-border/30 rounded hover:border-eg4h-gold-dark/40 cursor-pointer flex items-center gap-1"
+            onClick={() => promptSignup('Create session notes to track your campaign story as it unfolds.')}
+            className="flex items-center gap-1 px-2 py-1 text-xs font-ui text-domain-amber border border-domain-panel-border/50 rounded hover:border-eg4h-gold-dark/60 transition-colors cursor-pointer"
           >
             <Plus className="w-3 h-3" /> New Session
           </button>
+        </SectionHeader>
+        <div className="space-y-2">
+          {demo.sessions.map(s => {
+            const open = expandedSession === s.id;
+            return (
+              <Card key={s.id} onClick={() => setExpandedSession(open ? null : s.id)}>
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <p className="font-cinzel text-sm text-eg4h-gold">Session {s.number} · {s.title}</p>
+                    <p className="text-[11px] font-ui text-domain-text-dim/60">{s.date}</p>
+                  </div>
+                  <ChevronRight className={`w-4 h-4 text-domain-text-dim shrink-0 mt-0.5 transition-transform ${open ? 'rotate-90' : ''}`} />
+                </div>
+                {open && (
+                  <p className="mt-3 text-xs font-crimson text-domain-text leading-relaxed">{s.summary}</p>
+                )}
+              </Card>
+            );
+          })}
         </div>
-        <Card className="!p-4">
-          <p className="text-xs font-crimson text-domain-text-dim/50 italic text-center">
-            Your adventure awaits. Session notes track every twist, reveal, and memorable moment — ready for recall when you need them.
-          </p>
-        </Card>
       </div>
 
-      {/* NPCs */}
       <div>
         <SectionHeader icon={Users} title="NPCs">
-          <button
-            onClick={() => promptLogin('Create and track NPCs with personality, quirks, motivation, and voice notes.')}
-            className="flex items-center gap-1 px-2 py-1 text-xs font-ui text-domain-amber border border-domain-panel-border/50 rounded hover:border-eg4h-gold-dark/60 transition-colors cursor-pointer"
-          >
-            <Plus className="w-3 h-3" /> Quick NPC
-          </button>
+          <div className="flex items-center gap-2">
+            <DmTierBadge onClick={goToPricing} label="AI" />
+            <button
+              onClick={() => promptSignup('Create and track NPCs with personality, quirks, motivation, and voice notes.')}
+              className="flex items-center gap-1 px-2 py-1 text-xs font-ui text-domain-amber border border-domain-panel-border/50 rounded hover:border-eg4h-gold-dark/60 transition-colors cursor-pointer"
+            >
+              <Plus className="w-3 h-3" /> Quick NPC
+            </button>
+          </div>
         </SectionHeader>
-        <Card className="!p-4">
-          <p className="text-xs font-crimson text-domain-text-dim/50 italic text-center">
-            Generate NPCs on the fly — name, role, personality, quirks, and motivation in one click. AI-enhanced embellishment available with DM tier.
-          </p>
-        </Card>
+        <div className="space-y-2">
+          {demo.npcs.map(n => {
+            const open = expandedNpc === n.id;
+            return (
+              <Card key={n.id} onClick={() => setExpandedNpc(open ? null : n.id)}>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="font-cinzel text-sm text-domain-text truncate">{n.name}</p>
+                    <p className="text-[11px] font-ui text-domain-text-dim/70 truncate">{n.role}</p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className={`text-[10px] font-ui uppercase tracking-wider px-1.5 py-0.5 rounded border ${
+                      n.status === 'alive' ? 'text-emerald-300/80 border-emerald-900/50' :
+                      n.status === 'dead' ? 'text-red-300/70 border-red-900/50' :
+                      'text-domain-text-dim border-domain-panel-border/40'
+                    }`}>{n.status}</span>
+                    <ChevronRight className={`w-4 h-4 text-domain-text-dim transition-transform ${open ? 'rotate-90' : ''}`} />
+                  </div>
+                </div>
+                {open && (
+                  <div className="mt-3 space-y-2 text-xs font-crimson text-domain-text leading-relaxed">
+                    <p><span className="text-eg4h-gold-dark">Personality:</span> {n.personality}</p>
+                    <p><span className="text-eg4h-gold-dark">Wants:</span> {n.motivation}</p>
+                    <p><span className="text-eg4h-gold-dark">Quirks:</span> {n.quirks}</p>
+                    <p className="italic text-domain-text-dim/80"><span className="text-eg4h-gold-dark not-italic">Voice:</span> {n.voiceNotes}</p>
+                  </div>
+                )}
+              </Card>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
 
   // ═══════════════════════════════════════════════════════════════
-  // CENTER PANEL — Plot, AI, Lore, Homebrew, Gallery, SRD
+  // CENTER — Threads, AI, Lore, Homebrew, Gallery, SRD
   // ═══════════════════════════════════════════════════════════════
   const CenterPanel = (
     <div className="flex flex-col gap-5 h-full min-h-0">
-      {/* Story Threads */}
       <div>
         <SectionHeader icon={Scroll} title="Story Threads">
           <button
-            onClick={() => promptLogin('Track plot hooks, consequences, quests, and mysteries across your sessions.')}
+            onClick={() => promptSignup('Track plot hooks, consequences, quests, and mysteries across your sessions.')}
             className="flex items-center gap-1 px-2 py-1 text-xs font-ui text-domain-amber border border-domain-panel-border/50 rounded hover:border-eg4h-gold-dark/60 transition-colors cursor-pointer"
           >
             <Plus className="w-3 h-3" /> New Thread
           </button>
         </SectionHeader>
-        <Card className="!p-4">
-          <p className="text-xs font-crimson text-domain-text-dim/50 italic text-center">
-            Never lose a plot thread again. Track hooks, consequences, quests, and mysteries with urgency and status.
-          </p>
-        </Card>
+        <div className="space-y-2">
+          {demo.threads.map(t => {
+            const open = expandedThread === t.id;
+            const urgencyStyle =
+              t.urgency === 'high' ? 'text-red-300/90 border-red-900/50' :
+              t.urgency === 'medium' ? 'text-amber-300/90 border-amber-900/50' :
+              'text-domain-text-dim border-domain-panel-border/40';
+            return (
+              <Card key={t.id} onClick={() => setExpandedThread(open ? null : t.id)}>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="font-cinzel text-sm text-domain-text">{t.title}</p>
+                    <p className="text-[11px] font-ui text-domain-text-dim/70">{t.type}</p>
+                  </div>
+                  <span className={`text-[10px] font-ui uppercase tracking-wider px-1.5 py-0.5 rounded border shrink-0 ${urgencyStyle}`}>
+                    {t.urgency}
+                  </span>
+                </div>
+                {open && <p className="mt-3 text-xs font-crimson text-domain-text leading-relaxed">{t.description}</p>}
+              </Card>
+            );
+          })}
+        </div>
       </div>
 
-      {/* AI Improv Assist — locked */}
+      {/* AI Improv Assist — interactive but gated */}
       <div>
-        <SectionHeader icon={Sparkles} title="AI Improv Assist" />
+        <SectionHeader icon={Sparkles} title="AI Improv Assist">
+          <DmTierBadge onClick={goToPricing} />
+        </SectionHeader>
         <div className="flex gap-2">
           <input
             type="text"
+            value={improvInput}
+            onChange={(e) => setImprovInput(e.target.value)}
             placeholder="The rogue just pickpocketed the king..."
             className={inputClass}
-            readOnly
-            onFocus={() => promptLogin('AI Improv Assist is a Dungeon Master tier feature. Get 3 campaign-aware suggestions for any situation.')}
           />
           <button
-            onClick={() => promptLogin('AI Improv Assist is a Dungeon Master tier feature. Get 3 campaign-aware suggestions for any situation.')}
-            className="px-3 py-2 text-xs font-ui text-domain-amber/40 border border-domain-warm/20 rounded-lg cursor-pointer relative"
+            onClick={goToPricing}
+            className="px-3 py-2 text-xs font-ui text-eg4h-gold border border-eg4h-gold/40 rounded-lg hover:bg-eg4h-gold/10 transition-colors cursor-pointer relative"
+            title="DM Tier feature — see pricing"
           >
             <Sparkles className="w-4 h-4" />
-            <Lock className="w-2.5 h-2.5 absolute -top-1 -right-1 text-eg4h-gold" />
           </button>
         </div>
         <p className="text-[10px] font-ui text-domain-text-dim/60 mt-1">Describe what happened — get 3 ways to run with it</p>
-        <Card className="!p-3 mt-2 border-dashed border-domain-panel-border/30">
-          <div className="flex items-center gap-2 text-domain-text-dim/40">
-            <Lock className="w-3.5 h-3.5 shrink-0" />
+        <Card className="!p-3 mt-2 border-dashed border-eg4h-gold/20">
+          <div className="flex items-start gap-2 text-domain-text-dim">
+            <Crown className="w-3.5 h-3.5 shrink-0 mt-0.5 text-eg4h-gold" />
             <p className="text-xs font-crimson italic">
-              Log in and upgrade to DM tier to unlock AI-powered suggestions that know your campaign's NPCs, lore, and story threads.
+              Campaign-aware AI knows The Shattered Crown, every NPC, every thread, every session note. <button onClick={goToPricing} className="underline text-eg4h-gold hover:text-eg4h-gold-light cursor-pointer">Upgrade to DM Tier</button> to unlock it.
             </p>
           </div>
         </Card>
       </div>
 
-      {/* World Lore */}
       <div>
         <SectionHeader icon={Globe} title="World Lore">
           <button
-            onClick={() => promptLogin('Build your world with locations, factions, deities, and history.')}
+            onClick={() => promptSignup('Build your world with locations, factions, deities, and history.')}
             className="flex items-center gap-1 px-2 py-1 text-xs font-ui text-domain-amber border border-domain-panel-border/50 rounded hover:border-eg4h-gold-dark/60 transition-colors cursor-pointer"
           >
             <Plus className="w-3 h-3" /> New Entry
           </button>
         </SectionHeader>
-        <Card className="!p-4">
-          <p className="text-xs font-crimson text-domain-text-dim/50 italic text-center">
-            Locations, factions, deities, history, cultures — build a living world and the AI will use it to enhance your sessions.
-          </p>
-        </Card>
+        <div className="space-y-2">
+          {demo.lore.map(l => {
+            const open = expandedLore === l.id;
+            return (
+              <Card key={l.id} onClick={() => setExpandedLore(open ? null : l.id)}>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="font-cinzel text-sm text-domain-text">{l.name}</p>
+                    <p className="text-[11px] font-ui text-domain-text-dim/70">{l.type}</p>
+                  </div>
+                  <ChevronRight className={`w-4 h-4 text-domain-text-dim transition-transform shrink-0 ${open ? 'rotate-90' : ''}`} />
+                </div>
+                {open && <p className="mt-3 text-xs font-crimson text-domain-text leading-relaxed">{l.description}</p>}
+              </Card>
+            );
+          })}
+        </div>
       </div>
 
-      {/* Homebrew */}
       <div>
         <SectionHeader icon={FileText} title="Homebrew">
           <button
-            onClick={() => promptLogin('Upload homebrew PDFs — custom monsters, classes, items, and house rules.')}
+            onClick={() => promptSignup('Upload homebrew PDFs — custom monsters, classes, items, and house rules.')}
             className="flex items-center gap-1 px-2 py-1 text-xs font-ui text-domain-amber border border-domain-panel-border/50 rounded hover:border-eg4h-gold-dark/60 transition-colors cursor-pointer"
           >
             <Plus className="w-3 h-3" /> Upload
           </button>
         </SectionHeader>
-        <Card className="!p-4">
-          <p className="text-xs font-crimson text-domain-text-dim/50 italic text-center">
-            Upload custom monsters, classes, items, spells, and house rules as PDFs. The AI reads them too.
-          </p>
-        </Card>
+        <div className="space-y-2">
+          {demo.homebrew.map(h => (
+            <Card key={h.id}>
+              <p className="font-cinzel text-sm text-domain-text">{h.name}</p>
+              <p className="text-[11px] font-ui text-domain-text-dim/70 mb-1">{h.type}</p>
+              <p className="text-xs font-crimson text-domain-text leading-relaxed">{h.notes}</p>
+            </Card>
+          ))}
+        </div>
       </div>
 
-      {/* Gallery */}
       <div>
         <SectionHeader icon={ImageIcon} title="Gallery">
           <button
-            onClick={() => promptLogin('Upload maps, handouts, portraits, and props to share with your party.')}
+            onClick={() => promptSignup('Upload maps, handouts, portraits, and props to share with your party.')}
             className="p-1 text-domain-amber border border-domain-panel-border/50 rounded hover:border-eg4h-gold-dark/60 transition-colors cursor-pointer"
           >
-            <ImageIcon className="w-3 h-3" />
+            <Plus className="w-3 h-3" />
           </button>
         </SectionHeader>
-        <Card className="!p-4">
-          <p className="text-xs font-crimson text-domain-text-dim/50 italic text-center">
-            Upload maps, handouts, portraits, and props. Tag and share images with your players during sessions.
-          </p>
-        </Card>
+        <div className="grid grid-cols-2 gap-2">
+          {demo.gallery.map(g => (
+            <div key={g.id} className="dm-panel-raised border rounded-lg aspect-video flex flex-col items-center justify-center p-2 text-center">
+              <ImageIcon className="w-5 h-5 text-domain-text-dim/50 mb-1" />
+              <p className="text-[11px] font-crimson text-domain-text leading-tight">{g.caption}</p>
+              <p className="text-[9px] font-ui text-domain-text-dim/60 uppercase tracking-wider mt-1">{g.tag}</p>
+            </div>
+          ))}
+        </div>
       </div>
 
-      {/* SRD Quick Reference — fully browsable */}
       {Object.keys(srdRef).length > 0 && (
         <div>
           <SectionHeader icon={BookMarked} title="Quick Reference" />
@@ -305,74 +401,133 @@ export default function DemoSessionView() {
   );
 
   // ═══════════════════════════════════════════════════════════════
-  // RIGHT PANEL — Party & Initiative (empty states)
+  // RIGHT — Party, Initiative, DM Notes
   // ═══════════════════════════════════════════════════════════════
   const RightPanel = (
     <div className="flex flex-col gap-5 h-full">
-      {/* Party Members */}
       <div>
         <SectionHeader icon={Users} title="Party">
           <button
-            onClick={() => promptLogin('Link a party from Character Evolver or invite players directly.')}
+            onClick={() => promptSignup('Link a party from Character Evolver or invite players directly.')}
             className="flex items-center gap-1 px-2 py-1 text-xs font-ui text-domain-amber border border-domain-panel-border/50 rounded hover:border-eg4h-gold-dark/60 transition-colors cursor-pointer"
           >
             <UserPlus className="w-3 h-3" /> Link Party
           </button>
         </SectionHeader>
-        <Card className="!p-4">
-          <p className="text-xs font-crimson text-domain-text-dim/50 italic text-center">
-            Link a party from Character Evolver or invite players with a shareable code. See AC, HP, Passive Perception, and send secret messages mid-session.
-          </p>
-        </Card>
+        <div className="space-y-2">
+          {demo.party.map(p => (
+            <Card key={p.id}>
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="font-cinzel text-sm text-eg4h-gold truncate">{p.name}</p>
+                  <p className="text-[11px] font-ui text-domain-text-dim/80">{p.race} {p.subclass} {p.class} · Lv {p.level}</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-2 mt-2">
+                <div className="text-center bg-domain-panel/50 border border-domain-panel-border/30 rounded px-1 py-1">
+                  <p className="text-[9px] font-ui text-domain-text-dim uppercase tracking-wider">AC</p>
+                  <p className="font-cinzel text-sm text-domain-text">{p.ac}</p>
+                </div>
+                <div className="text-center bg-domain-panel/50 border border-domain-panel-border/30 rounded px-1 py-1">
+                  <p className="text-[9px] font-ui text-domain-text-dim uppercase tracking-wider">HP</p>
+                  <p className="font-cinzel text-sm text-domain-text">{p.hp}/{p.maxHp}</p>
+                </div>
+                <div className="text-center bg-domain-panel/50 border border-domain-panel-border/30 rounded px-1 py-1">
+                  <p className="text-[9px] font-ui text-domain-text-dim uppercase tracking-wider">Pas Per</p>
+                  <p className="font-cinzel text-sm text-domain-text">{p.passivePerception}</p>
+                </div>
+              </div>
+              <p className="mt-2 text-[11px] font-ui text-domain-text-dim/80">{p.topScores}</p>
+              <p className="mt-1 text-[11px] font-crimson italic text-domain-text-dim">"{p.bonds}"</p>
+            </Card>
+          ))}
+        </div>
       </div>
 
-      {/* Initiative / Combat Tracker */}
       <div>
         <SectionHeader icon={Swords} title="Initiative Tracker" />
-        <Card className="!p-4">
-          <div className="flex flex-col items-center gap-3">
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2 px-3 py-1.5 bg-domain-panel/50 border border-domain-panel-border/20 rounded-lg">
-                <Dices className="w-4 h-4 text-domain-amber/50" />
-                <span className="font-cinzel text-sm text-domain-text-dim/40">Round —</span>
-              </div>
+        <Card>
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2 px-3 py-1 bg-domain-panel/50 border border-domain-panel-border/30 rounded-lg">
+              <Dices className="w-4 h-4 text-domain-amber" />
+              <span className="font-cinzel text-sm text-domain-text">Round {demo.initiative.round}</span>
             </div>
-            <p className="text-xs font-crimson text-domain-text-dim/50 italic text-center">
-              Roll for initiative. Add party members and monsters, track HP, and advance rounds. One click to start combat.
-            </p>
+            <button
+              onClick={() => promptSignup('Track HP, advance rounds, and manage turn order during combat.')}
+              className="text-[11px] font-ui text-domain-amber border border-domain-panel-border/50 rounded px-2 py-1 hover:border-eg4h-gold-dark/60 cursor-pointer"
+            >
+              Next Turn
+            </button>
+          </div>
+          <div className="space-y-1">
+            {demo.initiative.combatants
+              .sort((a, b) => b.initiative - a.initiative)
+              .map(c => {
+                const isActive = c.id === demo.initiative.active;
+                const dead = c.hp === 0;
+                return (
+                  <div
+                    key={c.id}
+                    className={`flex items-center justify-between gap-2 px-2 py-1.5 rounded text-xs ${
+                      isActive ? 'bg-eg4h-gold/10 border border-eg4h-gold/40' : 'border border-domain-panel-border/30'
+                    } ${dead ? 'opacity-50' : ''}`}
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="font-cinzel text-domain-text w-6 text-center shrink-0">{c.initiative}</span>
+                      <span className={`font-crimson truncate ${c.isParty ? 'text-eg4h-gold' : 'text-domain-text'}`}>
+                        {c.name}
+                      </span>
+                    </div>
+                    <span className={`font-ui text-[11px] shrink-0 ${dead ? 'text-red-400/80' : 'text-domain-text-dim'}`}>
+                      {dead ? 'Down' : `${c.hp}/${c.maxHp}`}
+                    </span>
+                  </div>
+                );
+              })}
           </div>
         </Card>
       </div>
 
-      {/* DM Notes placeholder */}
       <div>
         <SectionHeader icon={Eye} title="DM Secret Notes" />
-        <Card className="!p-4">
-          <p className="text-xs font-crimson text-domain-text-dim/50 italic text-center">
-            Keep private notes on each character — secrets, plot hooks, and things only you know. Send secret messages to individual players during sessions.
-          </p>
-        </Card>
+        <div className="space-y-2">
+          {demo.dmNotes.map(n => {
+            const open = expandedDmNote === n.id;
+            return (
+              <Card key={n.id} onClick={() => setExpandedDmNote(open ? null : n.id)}>
+                <div className="flex items-start justify-between gap-2">
+                  <p className="font-cinzel text-sm text-domain-text">{n.characterName}</p>
+                  <ChevronRight className={`w-4 h-4 text-domain-text-dim shrink-0 mt-0.5 transition-transform ${open ? 'rotate-90' : ''}`} />
+                </div>
+                {open && <p className="mt-2 text-xs font-crimson italic text-domain-text leading-relaxed">{n.note}</p>}
+              </Card>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
 
-  // ═══════════════════════════════════════════════════════════════
-  // RENDER
-  // ═══════════════════════════════════════════════════════════════
   return (
     <div className="dm-study-bg min-h-screen flex flex-col">
       {/* Demo banner */}
       <div className="bg-gradient-to-r from-eg4h-gold/10 via-eg4h-gold/15 to-eg4h-gold/10 border-b border-eg4h-gold-dark/30 relative z-30">
         <div className="max-w-[1600px] mx-auto px-4 py-2 flex items-center justify-between gap-3 flex-wrap">
           <p className="font-crimson text-sm text-domain-text">
-            You're exploring <span className="text-eg4h-gold font-semibold">DM's Domain</span>. Log in to save your campaign and unlock all features.
+            You're exploring a demo of <span className="text-eg4h-gold font-semibold">DM's Domain</span>. Sign up to save your own campaign.
           </p>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             <button
-              onClick={handleLogin}
+              onClick={goToPricing}
+              className="px-3 py-1.5 font-cinzel text-xs text-eg4h-gold border border-eg4h-gold/40 rounded hover:bg-eg4h-gold/10 transition-all cursor-pointer"
+            >
+              See Plans
+            </button>
+            <button
+              onClick={handleStartFree}
               className="px-4 py-1.5 font-cinzel text-xs font-semibold text-eg4h-black bg-gradient-to-r from-eg4h-gold to-eg4h-gold-light rounded shadow-[0_2px_8px_rgba(255,215,0,0.3)] hover:shadow-[0_2px_12px_rgba(255,215,0,0.5)] transition-all cursor-pointer"
             >
-              Log In
+              Start Free
             </button>
           </div>
         </div>
@@ -388,8 +543,8 @@ export default function DemoSessionView() {
             <img src="/dmd-logo.png" alt="DMD" className="w-8 h-8" />
           </button>
           <div className="flex-1 min-w-0">
-            <h1 className="font-cinzel text-lg text-eg4h-gold truncate">Demo Campaign</h1>
-            <p className="font-crimson text-xs text-domain-text-dim truncate">Explore the full DM's Domain experience</p>
+            <h1 className="font-cinzel text-lg text-eg4h-gold truncate">{demo.campaign.name}</h1>
+            <p className="font-crimson text-xs text-domain-text-dim truncate">{demo.campaign.tagline}</p>
           </div>
           <span className="shrink-0 px-2 py-0.5 text-[10px] font-ui rounded-full bg-domain-warm/20 text-domain-amber border border-domain-warm/30">
             Demo
@@ -422,14 +577,11 @@ export default function DemoSessionView() {
 
       {/* Three-column desktop / tabbed mobile */}
       <div className="flex-1 max-w-[1600px] mx-auto w-full relative z-10">
-        {/* Desktop: three columns */}
         <div className="hidden lg:grid lg:grid-cols-3 gap-0 h-[calc(100vh-110px)]">
           <div className="border-r border-domain-panel-border/30 p-4 overflow-y-auto">{LeftPanel}</div>
           <div className="border-r border-domain-panel-border/30 p-4 overflow-y-auto">{CenterPanel}</div>
           <div className="p-4 overflow-y-auto">{RightPanel}</div>
         </div>
-
-        {/* Mobile: active tab */}
         <div className="lg:hidden p-4 overflow-y-auto">
           {activeTab === 'left' && LeftPanel}
           {activeTab === 'center' && CenterPanel}
@@ -437,12 +589,12 @@ export default function DemoSessionView() {
         </div>
       </div>
 
-      {/* Login prompt modal */}
-      {loginPrompt && (
-        <LoginPrompt
-          message={loginPrompt}
-          onClose={() => setLoginPrompt(null)}
-          onLogin={handleLogin}
+      {signupPrompt && (
+        <SignupModal
+          message={signupPrompt}
+          onClose={closePrompt}
+          onStartFree={handleStartFree}
+          onLogIn={handleLogIn}
         />
       )}
     </div>
