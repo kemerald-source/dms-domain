@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useAuth } from '@/api/AuthContext';
 import Lightbox from '@/components/Lightbox';
+import { startCheckout, stashIntendedPlan } from '@/lib/checkout';
 
 // A single clickable screenshot. `variant`:
 //   - "full"  → full-width 16:9 frame. Use for whole-screen captures.
@@ -90,7 +91,7 @@ function GoldButton({ children, onClick, variant = 'primary', className = '' }) 
 }
 
 export default function Landing() {
-  const { isAuthenticated, loading, login } = useAuth();
+  const { user, isAuthenticated, loading, login } = useAuth();
   const navigate = useNavigate();
   const [showStickyBar, setShowStickyBar] = useState(false);
   const [lightbox, setLightbox] = useState(null); // { src, alt } | null
@@ -154,6 +155,18 @@ export default function Landing() {
     document.getElementById('pricing')?.scrollIntoView({ behavior: 'smooth' });
   };
   const handleLogin = () => login();
+
+  // Pricing button → if already signed in, go straight to Stripe Checkout.
+  // If not, stash the plan and send the user through signup. Dashboard resumes
+  // the checkout flow once they're authed.
+  const pickPlan = (plan) => async () => {
+    if (user?.email) {
+      await startCheckout(user.email, plan);
+    } else {
+      stashIntendedPlan(plan);
+      login();
+    }
+  };
 
   return (
     <div className="relative min-h-screen bg-domain-bg text-domain-text overflow-x-hidden">
@@ -463,7 +476,7 @@ export default function Landing() {
                 <li>✦ Player portal</li>
                 <li>✦ SRD Quick Reference</li>
               </ul>
-              <GoldButton onClick={handleLogin} variant="ghost" className="!px-5 !py-2.5 text-sm">Start Adventuring</GoldButton>
+              <GoldButton onClick={pickPlan('adventurer')} variant="ghost" className="!px-5 !py-2.5 text-sm">Start Adventuring</GoldButton>
             </div>
 
             {/* Dungeon Master — featured */}
@@ -484,7 +497,7 @@ export default function Landing() {
                 <li>✦ Homebrew uploads</li>
                 <li>✦ Campaign image gallery</li>
               </ul>
-              <GoldButton onClick={handleLogin} className="!px-5 !py-2.5 text-sm">Start Dungeon Master</GoldButton>
+              <GoldButton onClick={pickPlan('dm')} className="!px-5 !py-2.5 text-sm">Start Dungeon Master</GoldButton>
             </div>
 
             {/* Bundle */}
@@ -499,7 +512,7 @@ export default function Landing() {
                 <li>✦ Priority support</li>
                 <li>✦ Early access to new features</li>
               </ul>
-              <GoldButton onClick={handleLogin} variant="ghost" className="!px-5 !py-2.5 text-sm">Get the Bundle</GoldButton>
+              <GoldButton onClick={pickPlan('bundle')} variant="ghost" className="!px-5 !py-2.5 text-sm">Get the Bundle</GoldButton>
             </div>
           </div>
         </div>

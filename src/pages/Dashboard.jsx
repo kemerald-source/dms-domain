@@ -6,6 +6,7 @@ import { useAuth } from '@/api/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { useTier, FREE_LIMITS } from '@/lib/tier';
 import UpgradeModal from '@/components/UpgradeModal';
+import { startCheckout, readIntendedPlan, clearIntendedPlan } from '@/lib/checkout';
 
 function relativeTime(date) {
   const now = Date.now();
@@ -55,6 +56,17 @@ export default function Dashboard() {
       // Clean up URL
       window.history.replaceState({}, '', '/dashboard');
     }
+  }, [user?.email]);
+
+  // If the user picked a plan on the landing page before signing in, resume
+  // the checkout flow now that we have their email. One-shot — consume the
+  // stashed plan whether checkout succeeds or errors so we don't loop.
+  useEffect(() => {
+    if (!user?.email) return;
+    const plan = readIntendedPlan();
+    if (!plan) return;
+    clearIntendedPlan();
+    startCheckout(user.email, plan);
   }, [user?.email]);
 
   // Fetch campaigns and parties
