@@ -454,7 +454,7 @@ export default function Landing() {
         <div className="max-w-6xl mx-auto px-6">
           <SectionHeading
             eyebrow="Pricing"
-            title="Run your table for less than a session of pizza."
+            title="Everything your table needs. One subscription."
             subtitle="No ads. No data-mining. Just tools that work."
           />
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-12">
