@@ -1,17 +1,89 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/api/AuthContext';
 
-// Replace src with the real screenshot path when assets are dropped in /public.
-function Screenshot({ src, alt, caption, labels = [] }) {
+// Lightbox — full-size image overlay, closes on click or Escape.
+function Lightbox({ src, alt, onClose }) {
+  useEffect(() => {
+    if (!src) return;
+    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', onKey);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [src, onClose]);
+
   return (
-    <div className="relative w-full max-w-5xl mx-auto">
-      <div className="relative aspect-video rounded-xl border border-domain-panel-border bg-domain-panel-raised overflow-hidden shadow-[0_8px_40px_rgba(0,0,0,0.5)]">
+    <AnimatePresence>
+      {src && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.2 }}
+          className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-sm flex items-center justify-center p-6 cursor-zoom-out"
+          onClick={onClose}
+        >
+          <button
+            onClick={onClose}
+            className="absolute top-4 right-4 text-domain-text hover:text-eg4h-gold font-cinzel text-2xl w-10 h-10 flex items-center justify-center rounded-full border border-domain-panel-border bg-domain-bg/80"
+            aria-label="Close"
+          >
+            ×
+          </button>
+          <motion.img
+            initial={{ scale: 0.95 }}
+            animate={{ scale: 1 }}
+            exit={{ scale: 0.95 }}
+            src={src}
+            alt={alt}
+            className="max-w-full max-h-full object-contain rounded-lg shadow-[0_8px_60px_rgba(0,0,0,0.8)]"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}
+
+// A single clickable screenshot. `variant`:
+//   - "full"  → full-width 16:9 frame. Use for whole-screen captures.
+//   - "panel" → centered, natural dimensions. Use for component crops.
+function Screenshot({ src, alt, caption, labels = [], variant = 'full', onExpand }) {
+  const isPanel = variant === 'panel';
+
+  const frameBase = 'relative rounded-xl border border-domain-panel-border bg-domain-panel-raised overflow-hidden shadow-[0_8px_40px_rgba(0,0,0,0.5)]';
+  const frameFull = 'aspect-video';
+  const frameInteractive = src ? 'cursor-zoom-in group transition-transform duration-300 hover:scale-[1.01] hover:shadow-[0_8px_50px_rgba(255,215,0,0.15)]' : '';
+
+  const outerWidth = isPanel ? 'max-w-2xl' : 'max-w-5xl';
+
+  return (
+    <div className={`relative w-full ${outerWidth} mx-auto`}>
+      <div
+        className={`${frameBase} ${isPanel ? '' : frameFull} ${frameInteractive}`}
+        onClick={src ? onExpand : undefined}
+        role={src ? 'button' : undefined}
+        tabIndex={src ? 0 : undefined}
+        onKeyDown={src ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onExpand(); } } : undefined}
+      >
         {src ? (
-          <img src={src} alt={alt} className="w-full h-full object-contain" />
+          <>
+            <img
+              src={src}
+              alt={alt}
+              className={isPanel ? 'block w-full h-auto' : 'w-full h-full object-contain'}
+            />
+            <div className="absolute bottom-3 right-3 px-3 py-1 rounded-md bg-domain-bg/80 backdrop-blur-sm border border-domain-panel-border text-domain-text-dim font-ui text-xs uppercase tracking-wider opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">
+              Click to enlarge
+            </div>
+          </>
         ) : (
-          <div className="w-full h-full flex flex-col items-center justify-center text-domain-text-dim">
+          <div className={`${isPanel ? 'py-24' : 'w-full h-full'} flex flex-col items-center justify-center text-domain-text-dim`}>
             <div className="text-6xl mb-3 opacity-40">▤</div>
             <div className="font-ui text-sm uppercase tracking-widest opacity-60">Screenshot Placeholder</div>
             <div className="font-ui text-xs mt-2 opacity-40">{alt}</div>
@@ -65,6 +137,9 @@ export default function Landing() {
   const { isAuthenticated, loading, login } = useAuth();
   const navigate = useNavigate();
   const [showStickyBar, setShowStickyBar] = useState(false);
+  const [lightbox, setLightbox] = useState(null); // { src, alt } | null
+  const openLightbox = (src, alt) => () => setLightbox({ src, alt });
+  const closeLightbox = () => setLightbox(null);
 
   // Strip OAuth response fragments left behind by the implicit-grant redirect.
   useEffect(() => {
@@ -97,6 +172,8 @@ export default function Landing() {
 
   return (
     <div className="relative min-h-screen bg-domain-bg text-domain-text overflow-x-hidden">
+      <Lightbox src={lightbox?.src} alt={lightbox?.alt} onClose={closeLightbox} />
+
       {/* ─── Sticky CTA bar ─── */}
       <motion.div
         initial={false}
@@ -207,12 +284,24 @@ export default function Landing() {
           <Screenshot
             src="/LP-DM%20View.png"
             alt="Session view trifold layout"
+            variant="full"
+            onExpand={openLightbox('/LP-DM%20View.png', 'Session view trifold layout')}
             labels={[
               { title: 'Trifold Layout', body: 'NPCs, threads, and notes side-by-side. See the whole table at a glance.' },
               { title: 'SRD Reference', body: 'Rules and spells one click away. No more digging through PDFs.' },
               { title: 'Live Initiative', body: 'Track turn order without breaking immersion.' },
             ]}
           />
+          <div className="mt-12">
+            <p className="text-center font-cinzel text-eg4h-gold-dark uppercase tracking-[0.3em] text-xs mb-4">Also in view — AI Session Summaries</p>
+            <Screenshot
+              src="/LP-%20AI%20summary.png"
+              alt="AI-generated session summary"
+              variant="panel"
+              onExpand={openLightbox('/LP-%20AI%20summary.png', 'AI-generated session summary')}
+              caption="Post-session, the AI condenses raw notes into a clean recap."
+            />
+          </div>
         </div>
       </section>
 
@@ -225,8 +314,10 @@ export default function Landing() {
             subtitle="When the party does something you didn't plan for — and they always do."
           />
           <Screenshot
-            src="/LP-%20AI%20summary.png"
+            src="/LP-Improv%20Assist.png"
             alt="AI Improv Assist panel showing three suggestion cards"
+            variant="panel"
+            onExpand={openLightbox('/LP-Improv%20Assist.png', 'AI Improv Assist panel')}
             labels={[
               { title: 'Escalate', body: 'Lean into chaos. Real consequences, raised stakes.' },
               { title: 'Redirect', body: 'A graceful pivot. An NPC steps in, a detail emerges.' },
@@ -250,6 +341,8 @@ export default function Landing() {
           <Screenshot
             src="/LP-Quick%20NPC%20Generator.png"
             alt="NPC generator with a generated character card"
+            variant="panel"
+            onExpand={openLightbox('/LP-Quick%20NPC%20Generator.png', 'Quick NPC Generator')}
             labels={[
               { title: 'Quick or Detailed', body: 'A name and quirk for the throwaway. A full sheet for the recurring face.' },
               { title: 'Voice Notes', body: 'How they speak. What they want. What they hide.' },
@@ -270,6 +363,8 @@ export default function Landing() {
           <Screenshot
             src="/LP-Party%20Initiative.png"
             alt="Party panel showing character cards"
+            variant="panel"
+            onExpand={openLightbox('/LP-Party%20Initiative.png', 'Party & Initiative')}
             labels={[
               { title: 'Character Sheets', body: 'Imported from Character Evolver or added manually.' },
               { title: 'Bonds & Backstory', body: 'Surface what each player wrote. Reward what they care about.' },
@@ -288,8 +383,10 @@ export default function Landing() {
             subtitle="Send a link. Players join from Character Evolver. Done."
           />
           <Screenshot
-            src="/LP-Campaigns%20List.png"
-            alt="Campaign invite link UI"
+            src="/LP-Invite.png"
+            alt="Campaign invite UI"
+            variant="panel"
+            onExpand={openLightbox('/LP-Invite.png', 'Campaign invite')}
             labels={[
               { title: 'One-Link Invites', body: 'Share a URL. Players accept with one click.' },
               { title: 'Character Evolver Sync', body: 'Their sheets flow straight into your campaign.' },
@@ -310,6 +407,8 @@ export default function Landing() {
           <Screenshot
             src="/LP-Character%20corner.png"
             alt="Player portal showing character and shared assets"
+            variant="panel"
+            onExpand={openLightbox('/LP-Character%20corner.png', 'Player portal')}
             labels={[
               { title: 'Personal View', body: 'Their sheet, their notes, the handouts you shared.' },
               { title: 'Shared Gallery', body: 'Maps and portraits the party has discovered.' },
@@ -330,6 +429,8 @@ export default function Landing() {
           <Screenshot
             src="/LP-Gallery%20example.png"
             alt="World lore and homebrew panels"
+            variant="panel"
+            onExpand={openLightbox('/LP-Gallery%20example.png', 'Homebrew & world lore')}
             labels={[
               { title: 'Locations & Factions', body: 'Cities, kingdoms, cults — everything that shapes the world.' },
               { title: 'Custom Content', body: 'Your monsters, your magic items, your house rules.' },
