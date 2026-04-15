@@ -69,10 +69,13 @@ function clearAuthStorage() {
     keysToRemove.forEach(key => localStorage.removeItem(key));
   } catch { /* localStorage not available */ }
   try {
+    // Collect keys first — removing during forward iteration shifts indices and skips entries.
+    const sessionKeysToRemove = [];
     for (let i = 0; i < sessionStorage.length; i++) {
       const key = sessionStorage.key(i);
-      if (key && (key.startsWith('gotrue') || key.startsWith('netlify'))) sessionStorage.removeItem(key);
+      if (key && (key.startsWith('gotrue') || key.startsWith('netlify'))) sessionKeysToRemove.push(key);
     }
+    sessionKeysToRemove.forEach(key => sessionStorage.removeItem(key));
   } catch { /* sessionStorage not available */ }
   try {
     const cookieNames = ['nf_jwt', 'gotrue.user'];
@@ -170,7 +173,32 @@ export function AuthProvider({ children }) {
     window.location.href = '/.netlify/identity/authorize?provider=google&prompt=select_account';
   };
 
-  const logout = () => {
+  const logout = async () => {
+    // Capture the access token BEFORE clearing storage — we need it to revoke server-side.
+    let accessToken = null;
+    try {
+      accessToken = window.netlifyIdentity?.currentUser?.()?.token?.access_token || null;
+    } catch { /* ignore */ }
+    if (!accessToken) {
+      try {
+        const stored = localStorage.getItem('gotrue.user');
+        if (stored) accessToken = JSON.parse(stored)?.token?.access_token || null;
+      } catch { /* ignore */ }
+    }
+
+    // Server-side revocation — tell GoTrue to invalidate the session before we clear
+    // the client. Without this, the cookie/token can still be honored on subsequent
+    // requests until natural expiry.
+    if (accessToken) {
+      try {
+        await fetch('/.netlify/identity/logout', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${accessToken}` },
+          keepalive: true,
+        });
+      } catch { /* network failure — proceed with client cleanup anyway */ }
+    }
+
     setUser(null);
 
     // Unbind all widget event listeners BEFORE clearing — prevents the widget
