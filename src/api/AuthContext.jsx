@@ -5,6 +5,7 @@ const AuthContext = createContext(null);
 let netlifyIdentity = null;
 let widgetInitialized = false;
 let widgetListenersBound = false;
+let widgetObserver = null;
 
 function loadIdentityWidget() {
   return new Promise((resolve) => {
@@ -57,6 +58,40 @@ function cleanupIdentityWidget() {
   document.body.style.touchAction = '';
   document.body.style.userSelect = '';
   document.body.removeAttribute('style');
+}
+
+// Watch for late-injected widget elements and remove them immediately.
+// This catches overlays the widget injects after all timed cleanup passes.
+function startWidgetObserver() {
+  if (widgetObserver) return; // already watching
+  const root = document.getElementById('root');
+  widgetObserver = new MutationObserver((mutations) => {
+    for (const mutation of mutations) {
+      for (const node of mutation.addedNodes) {
+        if (node.nodeType !== 1) continue; // skip text nodes
+        // Identify Netlify Identity widget elements injected outside #root
+        if (node === root || root?.contains(node)) continue;
+        const isWidget =
+          node.tagName === 'IFRAME' ||
+          (node.id && node.id.includes('netlify-identity')) ||
+          (node.className && typeof node.className === 'string' && node.className.includes('netlify-identity'));
+        if (isWidget) {
+          node.remove();
+          // Also force-clear body styles the widget may have set
+          document.body.style.overflow = '';
+          document.body.style.position = '';
+          document.body.style.pointerEvents = '';
+          document.body.removeAttribute('style');
+        }
+      }
+    }
+  });
+  widgetObserver.observe(document.body, { childList: true, subtree: true });
+  // Auto-disconnect after 10 seconds — the widget won't inject anything after that
+  setTimeout(() => {
+    widgetObserver?.disconnect();
+    widgetObserver = null;
+  }, 10000);
 }
 
 function clearAuthStorage() {
@@ -144,7 +179,16 @@ export function AuthProvider({ children }) {
         identity.on('init', (initUser) => {
           if (initUser) {
             setUserWithRetry(initUser);
+            try { identity.close(); } catch { /* ignore */ }
             cleanupIdentityWidget();
+            startWidgetObserver();
+            // Same delayed cleanup passes as login — during OAuth redirect the
+            // widget fires 'init' (not 'login'), and it keeps injecting overlay
+            // elements after close(). Without these passes the page stays
+            // non-interactive until the user manually refreshes.
+            setTimeout(cleanupIdentityWidget, 200);
+            setTimeout(cleanupIdentityWidget, 600);
+            setTimeout(cleanupIdentityWidget, 1500);
           }
           setLoading(false);
         });
@@ -153,6 +197,7 @@ export function AuthProvider({ children }) {
           setUserWithRetry(loginUser);
           try { identity.close(); } catch { /* ignore */ }
           cleanupIdentityWidget();
+          startWidgetObserver();
           // Repeated cleanup passes — the widget sometimes injects elements after close()
           setTimeout(cleanupIdentityWidget, 200);
           setTimeout(cleanupIdentityWidget, 600);
