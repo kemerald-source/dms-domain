@@ -41,7 +41,14 @@ function Lightbox({ src, alt, onClose }) {
             exit={{ scale: 0.95 }}
             src={src}
             alt={alt}
-            className="max-w-full max-h-full object-contain rounded-lg shadow-[0_8px_60px_rgba(0,0,0,0.8)]"
+            className="rounded-lg shadow-[0_8px_60px_rgba(0,0,0,0.8)]"
+            style={{
+              width: 'auto',
+              height: 'auto',
+              maxWidth: 'min(95vw, 1600px)',
+              maxHeight: '92vh',
+              minWidth: 'min(90vw, 900px)',
+            }}
             onClick={(e) => e.stopPropagation()}
           />
         </motion.div>
@@ -60,12 +67,14 @@ function Screenshot({ src, alt, caption, labels = [], variant = 'full', onExpand
   const frameFull = 'aspect-video';
   const frameInteractive = src ? 'cursor-zoom-in group transition-transform duration-300 hover:scale-[1.01] hover:shadow-[0_8px_50px_rgba(255,215,0,0.15)]' : '';
 
-  const outerWidth = isPanel ? 'max-w-2xl' : 'max-w-5xl';
+  // Panel mode: frame hugs the image so we don't upscale past its natural size.
+  // `w-fit` makes the frame only as wide as the img inside it, centered via mx-auto.
+  const frameLayout = isPanel ? 'w-fit max-w-full mx-auto' : 'w-full';
 
   return (
-    <div className={`relative w-full ${outerWidth} mx-auto`}>
+    <div className="relative w-full max-w-5xl mx-auto">
       <div
-        className={`${frameBase} ${isPanel ? '' : frameFull} ${frameInteractive}`}
+        className={`${frameBase} ${isPanel ? frameLayout : frameFull} ${frameInteractive}`}
         onClick={src ? onExpand : undefined}
         role={src ? 'button' : undefined}
         tabIndex={src ? 0 : undefined}
@@ -76,14 +85,14 @@ function Screenshot({ src, alt, caption, labels = [], variant = 'full', onExpand
             <img
               src={src}
               alt={alt}
-              className={isPanel ? 'block w-full h-auto' : 'w-full h-full object-contain'}
+              className={isPanel ? 'block max-w-full h-auto' : 'w-full h-full object-contain'}
             />
             <div className="absolute bottom-3 right-3 px-3 py-1 rounded-md bg-domain-bg/80 backdrop-blur-sm border border-domain-panel-border text-domain-text-dim font-ui text-xs uppercase tracking-wider opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">
               Click to enlarge
             </div>
           </>
         ) : (
-          <div className={`${isPanel ? 'py-24' : 'w-full h-full'} flex flex-col items-center justify-center text-domain-text-dim`}>
+          <div className={`${isPanel ? 'px-16 py-24' : 'w-full h-full'} flex flex-col items-center justify-center text-domain-text-dim`}>
             <div className="text-6xl mb-3 opacity-40">▤</div>
             <div className="font-ui text-sm uppercase tracking-widest opacity-60">Screenshot Placeholder</div>
             <div className="font-ui text-xs mt-2 opacity-40">{alt}</div>
