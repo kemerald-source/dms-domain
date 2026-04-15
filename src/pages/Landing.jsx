@@ -98,13 +98,10 @@ export default function Landing() {
   const openLightbox = (src, alt) => () => setLightbox({ src, alt });
   const closeLightbox = () => setLightbox(null);
 
-  // Strip OAuth response fragments left behind by the implicit-grant redirect.
-  useEffect(() => {
-    const hash = window.location.hash || '';
-    if (/^#(?:access_token|id_token|refresh_token|error|error_description)=/.test(hash)) {
-      window.history.replaceState(null, '', window.location.pathname + window.location.search);
-    }
-  }, []);
+  // Do NOT strip the OAuth hash on mount — the Netlify Identity widget
+  // parses #access_token=... during init() and clears it itself. If we
+  // pre-emptively wipe the hash, we race the widget and kill auth on
+  // every OAuth return.
 
   // After OAuth, send authed users straight to the dashboard.
   useEffect(() => {
