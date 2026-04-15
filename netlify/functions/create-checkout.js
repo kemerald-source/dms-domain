@@ -1,10 +1,7 @@
 // ─── DMD Stripe Checkout Session Creator ───────────────────────
-// Creates a Stripe checkout session for DM tier or Bundle tier.
+// Creates a Stripe checkout session for Adventurer, Dungeon Master, or Bundle.
 
-const STRIPE_PRICES = {
-  dm: 'price_1TIX9HGABqpCtjhU69JegQgR',       // $5.99/mo
-  bundle: 'price_1TIX9bGABqpCtjhUn3eLmget',     // $9.99/mo
-};
+import { STRIPE_PRICES } from './_tierConfig.js';
 
 export async function handler(event) {
   const corsHeaders = {
@@ -31,7 +28,7 @@ export async function handler(event) {
 
   const priceId = STRIPE_PRICES[plan];
   if (!priceId) {
-    return { statusCode: 400, headers: corsHeaders, body: JSON.stringify({ error: 'Invalid plan. Must be: dm or bundle' }) };
+    return { statusCode: 400, headers: corsHeaders, body: JSON.stringify({ error: 'Invalid plan. Must be: adventurer, dm, or bundle' }) };
   }
 
   try {

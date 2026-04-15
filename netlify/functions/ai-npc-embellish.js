@@ -3,10 +3,7 @@
 // Preserves everything the DM explicitly wrote; AI only fills gaps.
 
 import { createClient } from '@supabase/supabase-js';
-
-const ADMIN_EMAILS = ['kcolburn@eg4h.net', 'centersfocus@gmail.com'];
-const DMD_PRODUCT_ID = 'prod_UH5JJZwg8AdVaI';
-const BUNDLE_PRODUCT_ID = 'prod_UH5KKwFpmJ46aw';
+import { AI_PRODUCT_IDS, isAdmin } from './_tierConfig.js';
 
 const SYSTEM_PROMPT = `You are the NPC embellishment engine inside DM's Domain, a D&D 5e campaign management tool. The DM has created a rough NPC and wants you to flesh it out.
 
@@ -32,8 +29,9 @@ Respond ONLY with valid JSON, no preamble, no markdown.`;
 
 // ─── Tier verification ──────────────────────────────────────────
 
-async function verifyPaidTier(email) {
-  if (ADMIN_EMAILS.includes(email.toLowerCase())) return true;
+// AI NPC embellishment requires Dungeon Master tier or Bundle. Adventurer excluded.
+async function verifyAiTier(email) {
+  if (isAdmin(email)) return true;
 
   const stripeKey = process.env.STRIPE_SECRET_KEY;
   if (!stripeKey) return false;
@@ -53,8 +51,7 @@ async function verifyPaidTier(email) {
     const subData = await subRes.json();
     for (const sub of (subData.data || [])) {
       for (const item of (sub.items?.data || [])) {
-        const productId = item.price?.product;
-        if (productId === DMD_PRODUCT_ID || productId === BUNDLE_PRODUCT_ID) return true;
+        if (AI_PRODUCT_IDS.has(item.price?.product)) return true;
       }
     }
   }
@@ -137,8 +134,8 @@ export async function handler(event) {
 
   // Verify tier
   try {
-    if (!(await verifyPaidTier(userEmail))) {
-      return { statusCode: 403, headers: corsHeaders, body: JSON.stringify({ error: 'AI NPC Embellish requires a DM tier subscription.' }) };
+    if (!(await verifyAiTier(userEmail))) {
+      return { statusCode: 403, headers: corsHeaders, body: JSON.stringify({ error: 'AI NPC Embellish requires Dungeon Master tier. Adventurer tier does not include AI features.' }) };
     }
   } catch (err) {
     console.error('Tier check error:', err);

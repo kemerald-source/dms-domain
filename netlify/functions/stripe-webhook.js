@@ -2,14 +2,11 @@
 // Handles subscription lifecycle events for DMD and Bundle products.
 // Stripe sends events here when subscriptions are created, updated, or deleted.
 
-const DMD_PRODUCT_ID = 'prod_UH5JJZwg8AdVaI';
-const BUNDLE_PRODUCT_ID = 'prod_UH5KKwFpmJ46aw';
+import { PAID_PRODUCT_IDS } from './_tierConfig.js';
 
+// Matches any paid DMD product: Adventurer, Dungeon Master, Bundle, or legacy.
 function isDmdSubscription(subscription) {
-  return (subscription.items?.data || []).some(item => {
-    const prodId = item.price?.product;
-    return prodId === DMD_PRODUCT_ID || prodId === BUNDLE_PRODUCT_ID;
-  });
+  return (subscription.items?.data || []).some(item => PAID_PRODUCT_IDS.has(item.price?.product));
 }
 
 export async function handler(event) {

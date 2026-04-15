@@ -210,7 +210,7 @@ export default function SessionView() {
   const [campaign, setCampaign] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState(() => localStorage.getItem('dmd-active-tab') || 'left');
-  const { tier, isDM } = useTier(user?.email);
+  const { tier, isDM, isPaid } = useTier(user?.email);
   const [showUpgrade, setShowUpgrade] = useState(false);
   const [upgradeReason, setUpgradeReason] = useState('');
 
@@ -336,9 +336,17 @@ export default function SessionView() {
   const [hpInputs, setHpInputs] = useState({});
   const [expandedNoteId, setExpandedNoteId] = useState(null);
 
-  // ─── Tier gate helper ────────────────────────────────────────
+  // ─── Tier gate helpers ───────────────────────────────────────
+  // requireDM — gates AI features and Homebrew/Gallery (Dungeon Master only).
+  // requirePaid — gates paid organizational features (Adventurer or higher).
   const requireDM = (reason) => {
     if (isDM) return true;
+    setUpgradeReason(reason);
+    setShowUpgrade(true);
+    return false;
+  };
+  const requirePaid = (reason) => {
+    if (isPaid) return true;
     setUpgradeReason(reason);
     setShowUpgrade(true);
     return false;
@@ -1225,10 +1233,10 @@ export default function SessionView() {
   const generateNpc = async () => {
     if (!supabase) return;
 
-    // Free tier: enforce NPC limit
-    if (!isDM && npcs.length >= FREE_LIMITS.npcs) {
+    // Free tier: enforce NPC limit. Adventurer and up get unlimited NPCs.
+    if (!isPaid && npcs.length >= FREE_LIMITS.npcs) {
       setShowNpcGen(false);
-      requireDM(`Free tier allows ${FREE_LIMITS.npcs} NPCs per campaign. Upgrade for unlimited NPCs.`);
+      requirePaid(`Free tier allows ${FREE_LIMITS.npcs} NPCs per campaign. Upgrade for unlimited NPCs.`);
       return;
     }
 
@@ -1432,8 +1440,8 @@ export default function SessionView() {
 
   // ─── Story thread CRUD ──────────────────────────────────────
   const openNewThread = () => {
-    if (!isDM && threads.length >= FREE_LIMITS.threads) {
-      requireDM(`Free tier allows ${FREE_LIMITS.threads} story threads per campaign. Upgrade for unlimited threads.`);
+    if (!isPaid && threads.length >= FREE_LIMITS.threads) {
+      requirePaid(`Free tier allows ${FREE_LIMITS.threads} story threads per campaign. Upgrade for unlimited threads.`);
       return;
     }
     setEditingThread(null);
@@ -1499,8 +1507,8 @@ export default function SessionView() {
 
   // ─── World lore CRUD ──────────────────────────────────────────
   const openNewLore = () => {
-    if (!isDM && lore.length >= FREE_LIMITS.lore) {
-      requireDM(`Free tier allows ${FREE_LIMITS.lore} lore entries per campaign. Upgrade for unlimited world lore.`);
+    if (!isPaid && lore.length >= FREE_LIMITS.lore) {
+      requirePaid(`Free tier allows ${FREE_LIMITS.lore} lore entries per campaign. Upgrade for unlimited world lore.`);
       return;
     }
     setEditingLore(null);
@@ -1841,7 +1849,7 @@ export default function SessionView() {
 
       {/* NPCs */}
       <div>
-        <SectionHeader icon={Users} title={`NPCs${!isDM ? ` (${npcs.length}/${FREE_LIMITS.npcs})` : ''}`}>
+        <SectionHeader icon={Users} title={`NPCs${!isPaid ? ` (${npcs.length}/${FREE_LIMITS.npcs})` : ''}`}>
           <button
             onClick={() => { setShowNpcGen(v => !v); if (npcAiMode === null) setNpcAiMode(isDM); }}
             className="flex items-center gap-1 px-2 py-1 text-xs font-ui text-domain-amber border border-domain-panel-border/50 rounded hover:border-eg4h-gold-dark/60 transition-colors cursor-pointer"
@@ -2120,7 +2128,7 @@ export default function SessionView() {
     <div className="flex flex-col gap-5 h-full min-h-0">
       {/* Story Threads */}
       <div className="flex-1 min-h-0 overflow-y-auto">
-        <SectionHeader icon={Scroll} title={`Story Threads${!isDM ? ` (${threads.length}/${FREE_LIMITS.threads})` : ''}`}>
+        <SectionHeader icon={Scroll} title={`Story Threads${!isPaid ? ` (${threads.length}/${FREE_LIMITS.threads})` : ''}`}>
           <button onClick={openNewThread} className="flex items-center gap-1 px-2 py-1 text-xs font-ui text-domain-amber border border-domain-panel-border/50 rounded hover:border-eg4h-gold-dark/60 transition-colors cursor-pointer">
             <Plus className="w-3 h-3" /> New Thread
           </button>
@@ -2393,7 +2401,7 @@ export default function SessionView() {
 
       {/* World Lore */}
       <div className="shrink-0">
-        <SectionHeader icon={Globe} title={`World Lore${!isDM ? ` (${lore.length}/${FREE_LIMITS.lore})` : ''}`}>
+        <SectionHeader icon={Globe} title={`World Lore${!isPaid ? ` (${lore.length}/${FREE_LIMITS.lore})` : ''}`}>
           <button onClick={openNewLore} className="flex items-center gap-1 px-2 py-1 text-xs font-ui text-domain-amber border border-domain-panel-border/50 rounded hover:border-eg4h-gold-dark/60 transition-colors cursor-pointer">
             <Plus className="w-3 h-3" /> New Entry
           </button>
@@ -3414,8 +3422,8 @@ export default function SessionView() {
               <p className="font-crimson text-xs text-domain-text-dim truncate">{campaign.description}</p>
             )}
           </div>
-          <span className={`shrink-0 px-2 py-0.5 text-[10px] font-ui rounded-full ${isDM ? 'bg-eg4h-gold/20 text-eg4h-gold border border-eg4h-gold-dark/40' : 'bg-gray-800/50 text-gray-400 border border-gray-700/40'}`}>
-            {isDM ? 'DM' : 'Free'}
+          <span className={`shrink-0 px-2 py-0.5 text-[10px] font-ui rounded-full ${isPaid ? 'bg-eg4h-gold/20 text-eg4h-gold border border-eg4h-gold-dark/40' : 'bg-gray-800/50 text-gray-400 border border-gray-700/40'}`}>
+            {tier === 'dungeon_master' ? 'DM' : tier === 'adventurer' ? 'Adv' : 'Free'}
           </span>
         </div>
       </header>

@@ -63,13 +63,13 @@ function buildUserMessage(type, prompt, context) {
 }
 
 // ─── Tier verification ─────────────────────────────────────────
-const ADMIN_EMAILS = ['kcolburn@eg4h.net', 'centersfocus@gmail.com'];
-const DMD_PRODUCT_ID = 'prod_UH5JJZwg8AdVaI';
-const BUNDLE_PRODUCT_ID = 'prod_UH5KKwFpmJ46aw';
+// AI features require Dungeon Master tier or Bundle (or legacy DM/Bundle).
+// Adventurer is paid but does NOT get AI — enforced here server-side.
+import { AI_PRODUCT_IDS, isAdmin } from './_tierConfig.js';
 
-async function verifyPaidTier(email) {
+async function verifyAiTier(email) {
   if (!email) return false;
-  if (ADMIN_EMAILS.includes(email.toLowerCase())) return true;
+  if (isAdmin(email)) return true;
   const stripeKey = process.env.STRIPE_SECRET_KEY;
   if (!stripeKey) return false;
   try {
@@ -85,8 +85,7 @@ async function verifyPaidTier(email) {
       const subData = await subRes.json();
       for (const sub of (subData.data || [])) {
         for (const item of (sub.items?.data || [])) {
-          const prodId = item.price?.product;
-          if (prodId === DMD_PRODUCT_ID || prodId === BUNDLE_PRODUCT_ID) return true;
+          if (AI_PRODUCT_IDS.has(item.price?.product)) return true;
         }
       }
     }
@@ -122,11 +121,11 @@ export async function handler(event) {
 
   const { type, prompt, context, userEmail } = body;
 
-  // Tier gate for AI-powered features
+  // Tier gate for AI-powered features — requires Dungeon Master or Bundle.
   if (PAID_TYPES.includes(type) && userEmail) {
-    const isPaid = await verifyPaidTier(userEmail);
-    if (!isPaid) {
-      return { statusCode: 403, headers: corsHeaders, body: JSON.stringify({ error: `AI ${type} requires a DM tier subscription.` }) };
+    const hasAi = await verifyAiTier(userEmail);
+    if (!hasAi) {
+      return { statusCode: 403, headers: corsHeaders, body: JSON.stringify({ error: `AI ${type} requires Dungeon Master tier. Adventurer tier does not include AI features.` }) };
     }
   }
 

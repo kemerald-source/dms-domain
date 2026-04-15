@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react';
 const ADMIN_EMAILS = ['kcolburn@eg4h.net', 'centersfocus@gmail.com'];
 
 // ─── Free tier limits ────────────────────────────────────────
+// Adventurer and Dungeon Master both get unlimited for in-session items
+// (NPCs, threads, lore). Campaign counts differ per tier — see CAMPAIGN_LIMITS.
 export const FREE_LIMITS = {
   campaigns: 1,
   npcs: 5,
@@ -13,15 +15,27 @@ export const FREE_LIMITS = {
   homebrew: 3,
 };
 
-// ─── Stripe price IDs (for checkout links) ───────────────────
+// Active-campaign caps per tier. Adventurer = 3, DM/Bundle = 6, Free = 1.
+// Archived campaigns are separate (Adventurer 5, DM unlimited) — not enforced
+// client-side yet; the archive UI will use this when added.
+export const CAMPAIGN_LIMITS = {
+  free: 1,
+  adventurer: 3,
+  dungeon_master: 6,
+};
+
+// ─── Stripe price IDs (for checkout) ─────────────────────────
+// Mirrors netlify/functions/_tierConfig.js — keep in sync when prices change.
 export const STRIPE_PRICES = {
-  dm: 'price_1TIX9HGABqpCtjhU69JegQgR',       // $5.99/mo
-  bundle: 'price_1TIX9bGABqpCtjhUn3eLmget',     // $9.99/mo
+  adventurer: 'price_1TMYceGABqpCtjhU83jMEK2w', // $5.99/mo
+  dm:         'price_1TMYcoGABqpCtjhUWMAmfgNQ', // $9.99/mo
+  bundle:     'price_1TMYcyGABqpCtjhU4cCkxAYv', // $14.99/mo
 };
 
 /**
  * React hook that fetches and caches the user's tier.
- * Returns { tier, loading, isDM }
+ * Tier values: 'free' | 'adventurer' | 'dungeon_master'.
+ * Bundle subscribers come back as 'dungeon_master' — feature access is identical.
  */
 export function useTier(userEmail) {
   const [tier, setTier] = useState(null);
@@ -34,20 +48,17 @@ export function useTier(userEmail) {
       return;
     }
 
-    // Quick admin check — skip network call
     if (ADMIN_EMAILS.includes(userEmail.toLowerCase())) {
       setTier('dungeon_master');
       setLoading(false);
       return;
     }
 
-    // Check sessionStorage cache first
     const cacheKey = `dmd-tier-${userEmail.toLowerCase()}`;
     const cached = sessionStorage.getItem(cacheKey);
     if (cached) {
       try {
         const { tier: cachedTier, ts } = JSON.parse(cached);
-        // Cache valid for 10 minutes
         if (Date.now() - ts < 10 * 60 * 1000) {
           setTier(cachedTier);
           setLoading(false);
@@ -56,7 +67,6 @@ export function useTier(userEmail) {
       } catch { /* ignore bad cache */ }
     }
 
-    // Fetch from serverless function
     fetch('/.netlify/functions/check-tier', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -68,15 +78,23 @@ export function useTier(userEmail) {
         setTier(t);
         sessionStorage.setItem(cacheKey, JSON.stringify({ tier: t, ts: Date.now() }));
       })
-      .catch(() => {
-        setTier('free');
-      })
+      .catch(() => setTier('free'))
       .finally(() => setLoading(false));
   }, [userEmail]);
 
+  const resolved = tier || 'free';
+  const isDM = resolved === 'dungeon_master';
+
   return {
-    tier: tier || 'free',
+    tier: resolved,
     loading,
-    isDM: tier === 'dungeon_master',
+    // Paying customer (any paid tier, including Adventurer)
+    isPaid: resolved !== 'free',
+    // Has AI — Dungeon Master tier only (Bundle collapses to 'dungeon_master')
+    hasAi: isDM,
+    // DM-exclusive features (Homebrew, Gallery) — same set as hasAi today
+    isDM,
+    // Active-campaign limit for this tier
+    campaignLimit: CAMPAIGN_LIMITS[resolved] ?? CAMPAIGN_LIMITS.free,
   };
 }

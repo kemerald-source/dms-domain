@@ -37,7 +37,8 @@ export default function Dashboard() {
   const [savingDesc, setSavingDesc] = useState(false);
   const [showUpgrade, setShowUpgrade] = useState(false);
   const [upgradeReason, setUpgradeReason] = useState('');
-  const { tier, isDM } = useTier(user?.email);
+  const { tier, isDM, isPaid, campaignLimit } = useTier(user?.email);
+  const tierLabel = tier === 'dungeon_master' ? 'Dungeon Master' : tier === 'adventurer' ? 'Adventurer' : 'Free';
 
   // Redirect to login if not authenticated
   useEffect(() => {
@@ -214,8 +215,8 @@ export default function Dashboard() {
             <span className="text-domain-text-dim text-sm font-ui hidden sm:block">
               {user?.name || user?.email}
             </span>
-            <span className={`px-2 py-0.5 text-[10px] font-ui rounded-full ${isDM ? 'bg-eg4h-gold/20 text-eg4h-gold border border-eg4h-gold-dark/40' : 'bg-gray-800/50 text-gray-400 border border-gray-700/40'}`}>
-              {isDM ? 'Dungeon Master' : 'Free'}
+            <span className={`px-2 py-0.5 text-[10px] font-ui rounded-full ${isPaid ? 'bg-eg4h-gold/20 text-eg4h-gold border border-eg4h-gold-dark/40' : 'bg-gray-800/50 text-gray-400 border border-gray-700/40'}`}>
+              {tierLabel}
             </span>
             {user?.avatar && (
               <img src={user.avatar} alt="" className="w-8 h-8 rounded-full border border-eg4h-gold-dark/50" />
@@ -237,8 +238,13 @@ export default function Dashboard() {
           <h2 className="font-cinzel text-2xl md:text-3xl text-domain-text">Your Campaigns</h2>
           <button
             onClick={() => {
-              if (!isDM && campaigns.length >= FREE_LIMITS.campaigns) {
-                setUpgradeReason('Free tier allows 1 campaign. Upgrade to create unlimited campaigns.');
+              if (campaigns.length >= campaignLimit) {
+                const reasons = {
+                  free: 'Free tier allows 1 campaign. Upgrade to Adventurer for 3 or Dungeon Master for 6.',
+                  adventurer: 'Adventurer tier allows 3 active campaigns. Upgrade to Dungeon Master for 6.',
+                  dungeon_master: 'Dungeon Master tier allows 6 active campaigns. Archive one to create another.',
+                };
+                setUpgradeReason(reasons[tier] || reasons.free);
                 setShowUpgrade(true);
               } else {
                 setShowCreate(true);
@@ -251,13 +257,15 @@ export default function Dashboard() {
           </button>
         </div>
 
-        {/* Free tier upgrade prompt */}
+        {/* Upsell prompt for free and Adventurer users */}
         {!isDM && !loading && campaigns.length > 0 && (
           <div className="mb-6 px-4 py-3 bg-domain-panel border border-eg4h-gold-dark/20 rounded-lg flex items-center justify-between gap-4">
             <div className="flex items-center gap-3 min-w-0">
               <Sparkles className="w-4 h-4 text-eg4h-gold/70 shrink-0" />
               <p className="text-sm font-crimson text-domain-text-dim">
-                Unlock AI-powered tools, unlimited campaigns, and more with <span className="text-eg4h-gold">DM tier</span>.
+                {tier === 'adventurer'
+                  ? <>Unlock AI tools, more campaigns, and Homebrew/Gallery with <span className="text-eg4h-gold">Dungeon Master</span>.</>
+                  : <>Unlock AI-powered tools, more campaigns, and more with <span className="text-eg4h-gold">a paid tier</span>.</>}
               </p>
             </div>
             <button

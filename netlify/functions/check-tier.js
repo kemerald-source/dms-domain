@@ -1,104 +1,77 @@
 // ─── DMD Tier Check — Netlify Serverless Function ────────────
-// Checks admin override, then Stripe for active subscriptions
-// to DMD or Bundle products.
+// Resolves a user's tier from admin list or active Stripe subscriptions.
+// Returns: 'free' | 'adventurer' | 'dungeon_master'.
 
-const ADMIN_EMAILS = ['kcolburn@eg4h.net', 'centersfocus@gmail.com'];
+import { isAdmin, tierForProduct, highestTier } from './_tierConfig.js';
 
-const DMD_PRODUCT_ID = 'prod_UH5JJZwg8AdVaI';
-const BUNDLE_PRODUCT_ID = 'prod_UH5KKwFpmJ46aw';
+const cors = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'Content-Type',
+  'Access-Control-Allow-Methods': 'POST',
+};
 
 export async function handler(event) {
-  if (event.httpMethod === 'OPTIONS') {
-    return { statusCode: 204, headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'Content-Type', 'Access-Control-Allow-Methods': 'POST' } };
-  }
-
+  if (event.httpMethod === 'OPTIONS') return { statusCode: 204, headers: cors };
   if (event.httpMethod !== 'POST') {
-    return { statusCode: 405, body: JSON.stringify({ error: 'Method not allowed' }) };
+    return { statusCode: 405, headers: cors, body: JSON.stringify({ error: 'Method not allowed' }) };
   }
 
   let body;
-  try {
-    body = JSON.parse(event.body);
-  } catch {
-    return { statusCode: 400, body: JSON.stringify({ error: 'Invalid JSON' }) };
-  }
+  try { body = JSON.parse(event.body); }
+  catch { return { statusCode: 400, headers: cors, body: JSON.stringify({ error: 'Invalid JSON' }) }; }
 
   const { email } = body;
   if (!email) {
-    return { statusCode: 400, body: JSON.stringify({ error: 'Email required' }) };
+    return { statusCode: 400, headers: cors, body: JSON.stringify({ error: 'Email required' }) };
   }
 
-  // Admin override
-  if (ADMIN_EMAILS.includes(email.toLowerCase())) {
-    return {
-      statusCode: 200,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ tier: 'dungeon_master', source: 'admin' }),
-    };
+  // Admin override → top tier
+  if (isAdmin(email)) {
+    return json({ tier: 'dungeon_master', source: 'admin' });
   }
 
-  // Check Stripe for active subscription
   const stripeKey = process.env.STRIPE_SECRET_KEY;
   if (!stripeKey) {
-    // No Stripe key configured — default to free
-    return {
-      statusCode: 200,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ tier: 'free', source: 'no_stripe_key' }),
-    };
+    return json({ tier: 'free', source: 'no_stripe_key' });
   }
 
   try {
-    // Find Stripe customers by email
     const custRes = await fetch(
       `https://api.stripe.com/v1/customers?email=${encodeURIComponent(email)}&limit=5`,
       { headers: { Authorization: `Bearer ${stripeKey}` } }
     );
     const custData = await custRes.json();
+    if (!custData.data?.length) return json({ tier: 'free', source: 'no_customer' });
 
-    if (!custData.data?.length) {
-      return {
-        statusCode: 200,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tier: 'free', source: 'no_customer' }),
-      };
-    }
-
-    // Check each customer for active subscriptions to DMD or Bundle
+    // Collect every tier this email has an active sub for; return the highest.
+    const foundTiers = [];
     for (const customer of custData.data) {
       const subRes = await fetch(
         `https://api.stripe.com/v1/subscriptions?customer=${customer.id}&status=active&limit=10`,
         { headers: { Authorization: `Bearer ${stripeKey}` } }
       );
       const subData = await subRes.json();
-
       for (const sub of (subData.data || [])) {
         for (const item of (sub.items?.data || [])) {
-          const productId = item.price?.product;
-          if (productId === DMD_PRODUCT_ID || productId === BUNDLE_PRODUCT_ID) {
-            return {
-              statusCode: 200,
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ tier: 'dungeon_master', source: 'stripe' }),
-            };
-          }
+          const t = tierForProduct(item.price?.product);
+          if (t) foundTiers.push(t);
         }
       }
     }
 
-    // No matching subscription found
-    return {
-      statusCode: 200,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ tier: 'free', source: 'no_subscription' }),
-    };
+    const best = highestTier(foundTiers);
+    if (best) return json({ tier: best, source: 'stripe' });
+    return json({ tier: 'free', source: 'no_subscription' });
   } catch (err) {
     console.error('Stripe check error:', err);
-    // On error, default to free (fail closed)
-    return {
-      statusCode: 200,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ tier: 'free', source: 'error' }),
-    };
+    return json({ tier: 'free', source: 'error' });
   }
+}
+
+function json(payload) {
+  return {
+    statusCode: 200,
+    headers: { ...cors, 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  };
 }
