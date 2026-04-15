@@ -113,15 +113,32 @@ export default function Landing() {
   }, [loading, isAuthenticated, navigate]);
 
   // Handle regular anchor hashes (e.g. /#pricing from the demo CTA).
-  // Native scroll-to-id doesn't fire when the hash arrives via SPA navigation.
+  // SPA navigation doesn't fire the browser's native scroll-to-id. We also
+  // re-scroll after `window.load` because images above the anchor will shift
+  // layout as they decode, and an early scroll lands halfway up the page.
   useEffect(() => {
     const hash = window.location.hash;
     if (!hash || /^#(?:access_token|id_token|refresh_token|error|error_description)=/.test(hash)) return;
     const id = hash.slice(1);
-    const el = document.getElementById(id);
-    if (el) {
-      setTimeout(() => el.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+
+    const scrollToAnchor = (smooth = true) => {
+      const el = document.getElementById(id);
+      if (el) el.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto', block: 'start' });
+    };
+
+    // Initial scroll once React has painted.
+    const raf = requestAnimationFrame(() => requestAnimationFrame(() => scrollToAnchor(true)));
+
+    // Re-align once images/fonts finish loading.
+    const onLoad = () => scrollToAnchor(false);
+    if (document.readyState !== 'complete') {
+      window.addEventListener('load', onLoad, { once: true });
     }
+
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener('load', onLoad);
+    };
   }, []);
 
   // Sticky CTA appears once the user scrolls past the hero (~viewport height).
@@ -409,62 +426,80 @@ export default function Landing() {
       </section>
 
       {/* ─── 10. PRICING ─── */}
-      <section id="pricing" className="relative py-24 md:py-32 bg-domain-dark border-y border-domain-panel-border">
-        <div className="max-w-6xl mx-auto px-6">
+      <section id="pricing" className="relative py-24 md:py-32 bg-domain-dark border-y border-domain-panel-border scroll-mt-16">
+        <div className="max-w-7xl mx-auto px-6">
           <SectionHeading
             eyebrow="Pricing"
             title="Everything your table needs. One subscription."
             subtitle="No ads. No data-mining. Just tools that work."
           />
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-12">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mt-14">
             {/* Free */}
-            <div className="dm-panel-raised rounded-xl border p-8 flex flex-col">
-              <div className="font-cinzel text-eg4h-gold-dark uppercase tracking-widest text-sm mb-2">Free</div>
-              <div className="font-cinzel-decorative text-4xl text-domain-text mb-1">$0</div>
-              <div className="font-crimson italic text-domain-text-dim mb-6">Try before you commit.</div>
-              <ul className="space-y-3 font-crimson text-domain-text mb-8 flex-1">
+            <div className="dm-panel-raised rounded-xl border p-6 flex flex-col">
+              <div className="font-cinzel text-eg4h-gold-dark uppercase tracking-widest text-xs mb-2">Free</div>
+              <div className="font-cinzel-decorative text-3xl text-domain-text mb-1">$0</div>
+              <div className="font-crimson italic text-domain-text-dim text-sm mb-5">Try before you commit.</div>
+              <ul className="space-y-2 font-crimson text-sm text-domain-text mb-6 flex-1">
                 <li>• Demo mode — explore the full interface</li>
                 <li>• Browse SRD reference</li>
-                <li>• See every feature in action</li>
                 <li className="text-domain-text-dim">— No saved campaigns</li>
                 <li className="text-domain-text-dim">— No AI features</li>
               </ul>
-              <GoldButton onClick={enterDemo} variant="ghost">Try the Demo</GoldButton>
+              <GoldButton onClick={enterDemo} variant="ghost" className="!px-5 !py-2.5 text-sm">Try the Demo</GoldButton>
             </div>
 
-            {/* DM Tier */}
-            <div className="relative rounded-xl border-2 border-eg4h-gold p-8 flex flex-col bg-gradient-to-b from-domain-panel-raised to-domain-panel shadow-[0_8px_40px_rgba(255,215,0,0.15)]">
-              <div className="absolute -top-4 left-1/2 -translate-x-1/2 px-4 py-1 bg-eg4h-gold text-eg4h-black font-cinzel text-xs uppercase tracking-widest rounded-full">
+            {/* Adventurer */}
+            <div className="dm-panel-raised rounded-xl border p-6 flex flex-col">
+              <div className="font-cinzel text-eg4h-gold-dark uppercase tracking-widest text-xs mb-2">Adventurer</div>
+              <div className="font-cinzel-decorative text-3xl text-domain-text mb-1">$5.99<span className="text-base text-domain-text-dim">/mo</span></div>
+              <div className="font-crimson italic text-domain-text-dim text-sm mb-5">For the DM building their first world.</div>
+              <ul className="space-y-2 font-crimson text-sm text-domain-text mb-6 flex-1">
+                <li>✦ 3 active campaigns</li>
+                <li>✦ 5 archived campaigns</li>
+                <li>✦ Session journal &amp; notes</li>
+                <li>✦ Initiative &amp; combat tracker</li>
+                <li>✦ NPC tracking (manual)</li>
+                <li>✦ Party management &amp; invite links</li>
+                <li>✦ Player portal</li>
+                <li>✦ SRD Quick Reference</li>
+              </ul>
+              <GoldButton onClick={handleLogin} variant="ghost" className="!px-5 !py-2.5 text-sm">Start Adventuring</GoldButton>
+            </div>
+
+            {/* Dungeon Master — featured */}
+            <div className="relative rounded-xl border-2 border-eg4h-gold p-6 flex flex-col bg-gradient-to-b from-domain-panel-raised to-domain-panel shadow-[0_8px_40px_rgba(255,215,0,0.15)]">
+              <div className="absolute -top-4 left-1/2 -translate-x-1/2 px-4 py-1 bg-eg4h-gold text-eg4h-black font-cinzel text-[10px] uppercase tracking-widest rounded-full whitespace-nowrap">
                 Most Popular
               </div>
-              <div className="font-cinzel text-eg4h-gold uppercase tracking-widest text-sm mb-2">Dungeon Master</div>
-              <div className="font-cinzel-decorative text-4xl text-gold-gradient mb-1">$5.99<span className="text-lg text-domain-text-dim">/mo</span></div>
-              <div className="font-crimson italic text-domain-text-dim mb-6">Everything you need to run a campaign.</div>
-              <ul className="space-y-3 font-crimson text-domain-text mb-8 flex-1">
-                <li>✦ Unlimited campaigns</li>
-                <li>✦ Full session view + trifold</li>
+              <div className="font-cinzel text-eg4h-gold uppercase tracking-widest text-xs mb-2">Dungeon Master</div>
+              <div className="font-cinzel-decorative text-3xl text-gold-gradient mb-1">$9.99<span className="text-base text-domain-text-dim">/mo</span></div>
+              <div className="font-crimson italic text-domain-text-dim text-sm mb-5">Full DM tools, AI-assisted.</div>
+              <ul className="space-y-2 font-crimson text-sm text-domain-text mb-6 flex-1">
+                <li>✦ 6 active campaigns</li>
+                <li>✦ Unlimited archived campaigns</li>
+                <li>✦ Everything in Adventurer</li>
                 <li>✦ AI Improv Assist</li>
                 <li>✦ AI NPC generation</li>
-                <li>✦ Session summaries</li>
-                <li>✦ Player invites & portal</li>
-                <li>✦ Homebrew & world lore</li>
+                <li>✦ AI session summaries</li>
+                <li>✦ Homebrew uploads</li>
+                <li>✦ Campaign image gallery</li>
               </ul>
-              <GoldButton onClick={handleLogin}>Start Dungeon Master</GoldButton>
+              <GoldButton onClick={handleLogin} className="!px-5 !py-2.5 text-sm">Start Dungeon Master</GoldButton>
             </div>
 
             {/* Bundle */}
-            <div className="dm-panel-raised rounded-xl border p-8 flex flex-col">
-              <div className="font-cinzel text-eg4h-gold-dark uppercase tracking-widest text-sm mb-2">Bundle</div>
-              <div className="font-cinzel-decorative text-4xl text-domain-text mb-1">$9.99<span className="text-lg text-domain-text-dim">/mo</span></div>
-              <div className="font-crimson italic text-domain-text-dim mb-6">DM's Domain + Character Evolver.</div>
-              <ul className="space-y-3 font-crimson text-domain-text mb-8 flex-1">
+            <div className="dm-panel-raised rounded-xl border p-6 flex flex-col">
+              <div className="font-cinzel text-eg4h-gold-dark uppercase tracking-widest text-xs mb-2">Bundle</div>
+              <div className="font-cinzel-decorative text-3xl text-domain-text mb-1">$14.99<span className="text-base text-domain-text-dim">/mo</span></div>
+              <div className="font-crimson italic text-domain-text-dim text-sm mb-5">DM's Domain + Character Evolver Pro.</div>
+              <ul className="space-y-2 font-crimson text-sm text-domain-text mb-6 flex-1">
                 <li>✦ Everything in Dungeon Master</li>
-                <li>✦ Character Evolver Pro</li>
+                <li>✦ Character Evolver Pro (unlimited characters, all creation paths, AI portraits)</li>
                 <li>✦ Seamless party-to-campaign sync</li>
                 <li>✦ Priority support</li>
                 <li>✦ Early access to new features</li>
               </ul>
-              <GoldButton onClick={handleLogin} variant="ghost">Get the Bundle</GoldButton>
+              <GoldButton onClick={handleLogin} variant="ghost" className="!px-5 !py-2.5 text-sm">Get the Bundle</GoldButton>
             </div>
           </div>
         </div>

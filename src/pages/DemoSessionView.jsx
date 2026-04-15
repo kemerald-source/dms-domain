@@ -141,11 +141,16 @@ export default function DemoSessionView() {
 
   const promptSignup = (message) => setSignupPrompt(message);
   const closePrompt = () => setSignupPrompt(null);
-  const handleStartFree = () => login();
-  const handleLogIn = () => login();
 
   // Scroll to pricing on the landing page.
   const goToPricing = () => navigate('/#pricing');
+
+  // Banner "Start Free" still launches the signup widget.
+  const handleStartFree = () => login();
+  // Modal "Start Free" is a soft conversion — show plans instead of jumping
+  // straight into OAuth, because the user hasn't picked a tier yet.
+  const handleModalStartFree = () => { closePrompt(); goToPricing(); };
+  const handleLogIn = () => login();
 
   const inputClass = "w-full px-3 py-2 bg-[rgba(15,12,8,0.50)] border border-domain-panel-border/40 rounded-lg text-domain-text placeholder-domain-text-dim/60 focus:border-eg4h-gold-dark focus:outline-none font-crimson text-sm";
 
@@ -620,7 +625,7 @@ export default function DemoSessionView() {
         <SignupModal
           message={signupPrompt}
           onClose={closePrompt}
-          onStartFree={handleStartFree}
+          onStartFree={handleModalStartFree}
           onLogIn={handleLogIn}
         />
       )}
