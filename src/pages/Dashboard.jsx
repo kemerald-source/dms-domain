@@ -41,12 +41,15 @@ export default function Dashboard() {
   const { tier, isDM, isPaid, campaignLimit } = useTier(user?.email);
   const tierLabel = tier === 'dungeon_master' ? 'Dungeon Master' : tier === 'adventurer' ? 'Adventurer' : 'Free';
 
-  // Redirect to login if not authenticated
+  // Redirect unauthenticated users to the landing page. Don't auto-call
+  // login() here — during logout there's a window where setUser(null) has
+  // fired but window.location.replace('/') hasn't, and hitting login() would
+  // redirect straight back to Google OAuth, defeating logout entirely.
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
-      login(() => navigate('/dashboard'));
+      navigate('/', { replace: true });
     }
-  }, [authLoading, isAuthenticated]);
+  }, [authLoading, isAuthenticated, navigate]);
 
   // Clear tier cache after Stripe checkout so tier refreshes immediately
   useEffect(() => {

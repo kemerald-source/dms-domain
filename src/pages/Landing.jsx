@@ -86,7 +86,7 @@ function GoldButton({ children, onClick, variant = 'primary', className = '' }) 
     ? 'text-eg4h-black bg-gradient-to-r from-eg4h-gold via-eg4h-gold-light to-eg4h-gold shadow-[0_4px_20px_rgba(255,215,0,0.4)] hover:shadow-[0_4px_30px_rgba(255,215,0,0.6)]'
     : 'text-eg4h-gold border-2 border-eg4h-gold-dark bg-transparent hover:bg-eg4h-gold/10';
   return (
-    <button onClick={onClick} className={`${base} ${styles} ${className}`}>{children}</button>
+    <button type="button" onClick={onClick} className={`${base} ${styles} ${className}`}>{children}</button>
   );
 }
 
@@ -156,12 +156,20 @@ export default function Landing() {
   };
   const handleLogin = () => login();
 
+  const [checkoutError, setCheckoutError] = useState(null);
+
   // Pricing button → if already signed in, go straight to Stripe Checkout.
   // If not, stash the plan and send the user through signup. Dashboard resumes
   // the checkout flow once they're authed.
-  const pickPlan = (plan) => async () => {
+  const pickPlan = (plan) => async (e) => {
+    e?.preventDefault?.();
+    setCheckoutError(null);
     if (user?.email) {
-      await startCheckout(user.email, plan);
+      const res = await startCheckout(user.email, plan);
+      if (!res.ok) {
+        console.error('[checkout] failed', res.error);
+        setCheckoutError(res.error || 'Checkout failed — check the console.');
+      }
     } else {
       stashIntendedPlan(plan);
       login();
@@ -441,6 +449,13 @@ export default function Landing() {
       {/* ─── 10. PRICING ─── */}
       <section id="pricing" className="relative py-24 md:py-32 bg-domain-dark border-y border-domain-panel-border scroll-mt-16">
         <div className="max-w-7xl mx-auto px-6">
+          {checkoutError && (
+            <div className="max-w-2xl mx-auto mb-6 px-4 py-3 bg-red-900/20 border border-red-500/40 rounded-lg">
+              <p className="font-crimson text-sm text-red-300">
+                <span className="font-semibold">Checkout error:</span> {checkoutError}
+              </p>
+            </div>
+          )}
           <SectionHeading
             eyebrow="Pricing"
             title="Everything your table needs. One subscription."
