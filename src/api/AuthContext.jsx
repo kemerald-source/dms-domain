@@ -177,7 +177,12 @@ export function AuthProvider({ children }) {
     // Capture the access token BEFORE clearing storage — we need it to revoke server-side.
     let accessToken = null;
     try {
-      accessToken = window.netlifyIdentity?.currentUser?.()?.token?.access_token || null;
+      const cu = window.netlifyIdentity?.currentUser?.();
+      accessToken = cu?.token?.access_token || null;
+      // If the token is expired, cu.jwt(true) refreshes and returns a valid one.
+      if (!accessToken && cu?.jwt) {
+        try { accessToken = await cu.jwt(true); } catch { /* ignore */ }
+      }
     } catch { /* ignore */ }
     if (!accessToken) {
       try {
@@ -215,9 +220,13 @@ export function AuthProvider({ children }) {
     clearAuthStorage();
     cleanupIdentityWidget();
 
-    // Destroy the widget instance entirely so nothing can call GoTrue endpoints
+    // Destroy the widget instance entirely so nothing can call GoTrue endpoints.
+    // Reset the module-level init flags too, so if the user logs back in in the
+    // same tab the widget rebinds cleanly instead of assuming it's already set up.
     try { window.netlifyIdentity = null; } catch { /* ignore */ }
     netlifyIdentity = null;
+    widgetInitialized = false;
+    widgetListenersBound = false;
 
     // replace() — no back-button return to the authenticated state
     window.location.replace('/');
