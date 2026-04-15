@@ -1,9 +1,10 @@
 import { useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 
 // Fullscreen image overlay. Closes on Esc, click-outside, or × button.
-// Scales small source images UP to fill the viewport so clicking always
-// produces a larger view than the thumbnail.
+// Portaled to document.body so ancestor stacking contexts (e.g. the dm-study-bg
+// wrapper that forces `position: relative` on its children) can't trap it.
 export default function Lightbox({ src, alt, onClose }) {
   useEffect(() => {
     if (!src) return;
@@ -17,7 +18,7 @@ export default function Lightbox({ src, alt, onClose }) {
     };
   }, [src, onClose]);
 
-  return (
+  return createPortal(
     <AnimatePresence>
       {src && (
         <motion.div
@@ -53,6 +54,7 @@ export default function Lightbox({ src, alt, onClose }) {
           />
         </motion.div>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body
   );
 }
