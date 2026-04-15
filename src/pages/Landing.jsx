@@ -205,6 +205,7 @@ export default function Landing() {
             subtitle="Every tool you need, one screen, no tab-switching."
           />
           <Screenshot
+            src="/LP-DM%20View.png"
             alt="Session view trifold layout"
             labels={[
               { title: 'Trifold Layout', body: 'NPCs, threads, and notes side-by-side. See the whole table at a glance.' },
@@ -224,6 +225,7 @@ export default function Landing() {
             subtitle="When the party does something you didn't plan for — and they always do."
           />
           <Screenshot
+            src="/LP-%20AI%20summary.png"
             alt="AI Improv Assist panel showing three suggestion cards"
             labels={[
               { title: 'Escalate', body: 'Lean into chaos. Real consequences, raised stakes.' },
@@ -246,6 +248,7 @@ export default function Landing() {
             subtitle="Need a tavern keeper, a city guard, a mysterious stranger? In seconds."
           />
           <Screenshot
+            src="/LP-Quick%20NPC%20Generator.png"
             alt="NPC generator with a generated character card"
             labels={[
               { title: 'Quick or Detailed', body: 'A name and quirk for the throwaway. A full sheet for the recurring face.' },
@@ -265,6 +268,7 @@ export default function Landing() {
             subtitle="Every character sheet, bond, and backstory at your fingertips."
           />
           <Screenshot
+            src="/LP-Party%20Initiative.png"
             alt="Party panel showing character cards"
             labels={[
               { title: 'Character Sheets', body: 'Imported from Character Evolver or added manually.' },
@@ -284,6 +288,7 @@ export default function Landing() {
             subtitle="Send a link. Players join from Character Evolver. Done."
           />
           <Screenshot
+            src="/LP-Campaigns%20List.png"
             alt="Campaign invite link UI"
             labels={[
               { title: 'One-Link Invites', body: 'Share a URL. Players accept with one click.' },
@@ -303,6 +308,7 @@ export default function Landing() {
             subtitle="Their character. Their journal. Their view of the world you built."
           />
           <Screenshot
+            src="/LP-Character%20corner.png"
             alt="Player portal showing character and shared assets"
             labels={[
               { title: 'Personal View', body: 'Their sheet, their notes, the handouts you shared.' },
@@ -322,6 +328,7 @@ export default function Landing() {
             subtitle="The places, the powers, the gods you invented — written down, organized, searchable."
           />
           <Screenshot
+            src="/LP-Gallery%20example.png"
             alt="World lore and homebrew panels"
             labels={[
               { title: 'Locations & Factions', body: 'Cities, kingdoms, cults — everything that shapes the world.' },
