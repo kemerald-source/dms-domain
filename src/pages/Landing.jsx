@@ -9,7 +9,7 @@ function Screenshot({ src, alt, caption, labels = [] }) {
     <div className="relative w-full max-w-5xl mx-auto">
       <div className="relative aspect-video rounded-xl border border-domain-panel-border bg-domain-panel-raised overflow-hidden shadow-[0_8px_40px_rgba(0,0,0,0.5)]">
         {src ? (
-          <img src={src} alt={alt} className="w-full h-full object-cover" />
+          <img src={src} alt={alt} className="w-full h-full object-contain" />
         ) : (
           <div className="w-full h-full flex flex-col items-center justify-center text-domain-text-dim">
             <div className="text-6xl mb-3 opacity-40">▤</div>
