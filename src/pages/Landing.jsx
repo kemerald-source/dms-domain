@@ -175,6 +175,19 @@ export default function Landing() {
 
   return (
     <div className="relative min-h-screen bg-domain-bg text-domain-text overflow-x-hidden">
+      {/* Fixed hero backdrop — stays pinned to the viewport while the page scrolls.
+          Sections 2-11 carry opaque backgrounds at z-10, so they occlude this as
+          they scroll up past the hero. */}
+      <div
+        className="fixed inset-0 z-0 bg-cover bg-center bg-no-repeat opacity-40 pointer-events-none"
+        style={{ backgroundImage: 'url(/bg-dmdlanding.png)' }}
+        aria-hidden="true"
+      />
+      <div
+        className="fixed inset-0 z-0 bg-gradient-to-b from-domain-bg/60 via-transparent to-domain-bg pointer-events-none"
+        aria-hidden="true"
+      />
+
       <Lightbox src={lightbox?.src} alt={lightbox?.alt} onClose={closeLightbox} />
 
       {/* ─── Sticky CTA bar ─── */}
@@ -205,16 +218,9 @@ export default function Landing() {
       </motion.div>
 
       {/* ─── 1. HERO ─── */}
-      {/* Fixed hero with h-screen spacer below. overflow-x-hidden on the outer
-          wrapper (needed to prevent horizontal scroll) breaks position: sticky,
-          so we fix the hero to the viewport and let sections scroll over it. */}
-      <section className="fixed top-0 left-0 right-0 z-0 h-screen flex flex-col items-center justify-center overflow-hidden">
-        <div
-          className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-40"
-          style={{ backgroundImage: 'url(/bg-dmdlanding.png)' }}
-        />
-        <div className="absolute inset-0 bg-gradient-to-b from-domain-bg/60 via-transparent to-domain-bg" />
-
+      {/* Hero content sits in normal flow; the backdrop above is fixed so it
+          stays visible behind the scrolling content until later sections cover it. */}
+      <section className="relative z-10 min-h-screen flex flex-col items-center justify-center overflow-hidden">
         <div className="relative z-10 flex flex-col items-center text-center px-6 max-w-3xl">
           <motion.img
             src="/dmd-logo.png"
@@ -263,10 +269,6 @@ export default function Landing() {
           </motion.p>
         </div>
       </section>
-
-      {/* Spacer reserving the hero's viewport-height slot in the document flow,
-          since the hero is position: fixed and no longer takes up space. */}
-      <div className="h-screen" aria-hidden="true" />
 
       {/* ─── 2. THE PROBLEM ─── */}
       <section className="relative z-10 py-24 md:py-32 bg-domain-dark border-y border-domain-panel-border">
