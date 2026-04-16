@@ -51,7 +51,7 @@ function Screenshot({ src, alt, caption, labels = [], variant = 'full', onExpand
         <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
           {labels.map((l, i) => (
             <div key={i} className="dm-panel rounded-lg border p-4">
-              <div className="font-cinzel text-eg4h-gold text-sm uppercase tracking-wider mb-1">{l.title}</div>
+              <div className="font-cinzel text-domain-parchment-dark md:text-eg4h-gold text-sm uppercase tracking-wider mb-1">{l.title}</div>
               <div className="font-crimson text-domain-text text-sm leading-relaxed">{l.body}</div>
             </div>
           ))}
@@ -68,7 +68,7 @@ function SectionHeading({ eyebrow, title, subtitle }) {
   return (
     <div className="text-center mb-12 max-w-3xl mx-auto px-6">
       {eyebrow && (
-        <div className="font-cinzel text-eg4h-gold-dark uppercase tracking-[0.3em] text-sm mb-4">{eyebrow}</div>
+        <div className="font-cinzel text-domain-parchment-dark md:text-eg4h-gold-dark uppercase tracking-[0.3em] text-sm mb-4">{eyebrow}</div>
       )}
       <h2 className="font-cinzel-decorative text-3xl md:text-5xl font-bold text-gold-gradient mb-4 leading-tight">
         {title}
@@ -205,7 +205,10 @@ export default function Landing() {
       </motion.div>
 
       {/* ─── 1. HERO ─── */}
-      <section className="relative min-h-screen flex flex-col items-center justify-center overflow-hidden">
+      {/* Fixed hero with h-screen spacer below. overflow-x-hidden on the outer
+          wrapper (needed to prevent horizontal scroll) breaks position: sticky,
+          so we fix the hero to the viewport and let sections scroll over it. */}
+      <section className="fixed top-0 left-0 right-0 z-0 h-screen flex flex-col items-center justify-center overflow-hidden">
         <div
           className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-40"
           style={{ backgroundImage: 'url(/bg-dmdlanding.png)' }}
@@ -256,28 +259,32 @@ export default function Landing() {
             animate={{ opacity: 1 }}
             transition={{ duration: 1, delay: 1 }}
           >
-            An <span className="text-eg4h-gold-dark font-semibold">Evil Genius 4 Hire</span> production
+            An <span className="text-domain-parchment-dark md:text-eg4h-gold-dark font-semibold">Evil Genius 4 Hire</span> production
           </motion.p>
         </div>
       </section>
 
+      {/* Spacer reserving the hero's viewport-height slot in the document flow,
+          since the hero is position: fixed and no longer takes up space. */}
+      <div className="h-screen" aria-hidden="true" />
+
       {/* ─── 2. THE PROBLEM ─── */}
-      <section className="relative py-24 md:py-32 bg-domain-dark border-y border-domain-panel-border">
+      <section className="relative z-10 py-24 md:py-32 bg-domain-dark border-y border-domain-panel-border">
         <div className="max-w-3xl mx-auto px-6 text-center">
-          <div className="font-cinzel text-eg4h-gold-dark uppercase tracking-[0.3em] text-sm mb-6">The Problem</div>
+          <div className="font-cinzel text-domain-parchment-dark md:text-eg4h-gold-dark uppercase tracking-[0.3em] text-sm mb-6">The Problem</div>
           <h2 className="font-cinzel-decorative text-3xl md:text-5xl text-gold-gradient mb-8 leading-tight">
             You spent three hours building Marella the innkeeper. Now you can't remember if the players ever met her.
           </h2>
           <div className="font-crimson text-lg md:text-xl text-domain-text leading-relaxed space-y-5">
             <p>Notebooks fill up. Google Docs sprawl. Sticky notes vanish. Mid-session, a player asks about the priest from two months ago and you're flipping through screens trying to remember if his name was Edric or Aldric.</p>
             <p>Improvising on the fly is half the joy of running a game. Forgetting what you established last week is none of it.</p>
-            <p className="font-cinzel text-eg4h-gold text-xl md:text-2xl italic pt-4">DM's Domain remembers — so you don't have to.</p>
+            <p className="font-cinzel text-domain-parchment-dark md:text-eg4h-gold text-xl md:text-2xl italic pt-4">DM's Domain remembers — so you don't have to.</p>
           </div>
         </div>
       </section>
 
       {/* ─── 3. THE SESSION VIEW ─── */}
-      <section className="relative py-24 md:py-32">
+      <section className="relative z-10 py-24 md:py-32 bg-domain-bg">
         <div className="max-w-7xl mx-auto px-6">
           <SectionHeading
             eyebrow="At the Table"
@@ -296,7 +303,7 @@ export default function Landing() {
             ]}
           />
           <div className="mt-12">
-            <p className="text-center font-cinzel text-eg4h-gold-dark uppercase tracking-[0.3em] text-xs mb-4">Also in view — AI Session Summaries</p>
+            <p className="text-center font-cinzel text-domain-parchment-dark md:text-eg4h-gold-dark uppercase tracking-[0.3em] text-xs mb-4">Also in view — AI Session Summaries</p>
             <Screenshot
               src="/LP-%20AI%20summary.png"
               alt="AI-generated session summary"
@@ -309,7 +316,7 @@ export default function Landing() {
       </section>
 
       {/* ─── 4. AI IMPROV ASSIST ─── */}
-      <section className="relative py-24 md:py-32 bg-domain-dark border-y border-domain-panel-border">
+      <section className="relative z-10 py-24 md:py-32 bg-domain-dark border-y border-domain-panel-border">
         <div className="max-w-7xl mx-auto px-6">
           <SectionHeading
             eyebrow="Your Co-DM"
@@ -334,7 +341,7 @@ export default function Landing() {
       </section>
 
       {/* ─── 5. NPC GENERATION ─── */}
-      <section className="relative py-24 md:py-32">
+      <section className="relative z-10 py-24 md:py-32 bg-domain-bg">
         <div className="max-w-7xl mx-auto px-6">
           <SectionHeading
             eyebrow="Cast of Thousands"
@@ -356,7 +363,7 @@ export default function Landing() {
       </section>
 
       {/* ─── 6. YOUR PARTY ─── */}
-      <section className="relative py-24 md:py-32 bg-domain-dark border-y border-domain-panel-border">
+      <section className="relative z-10 py-24 md:py-32 bg-domain-dark border-y border-domain-panel-border">
         <div className="max-w-7xl mx-auto px-6">
           <SectionHeading
             eyebrow="Know Your Heroes"
@@ -378,7 +385,7 @@ export default function Landing() {
       </section>
 
       {/* ─── 7. INVITE & CONNECT ─── */}
-      <section className="relative py-24 md:py-32">
+      <section className="relative z-10 py-24 md:py-32 bg-domain-bg">
         <div className="max-w-7xl mx-auto px-6">
           <SectionHeading
             eyebrow="The Table"
@@ -400,7 +407,7 @@ export default function Landing() {
       </section>
 
       {/* ─── 8. PLAYER PORTAL ─── */}
-      <section className="relative py-24 md:py-32 bg-domain-dark border-y border-domain-panel-border">
+      <section className="relative z-10 py-24 md:py-32 bg-domain-dark border-y border-domain-panel-border">
         <div className="max-w-7xl mx-auto px-6">
           <SectionHeading
             eyebrow="For The Players"
@@ -422,7 +429,7 @@ export default function Landing() {
       </section>
 
       {/* ─── 9. HOMEBREW & WORLD LORE ─── */}
-      <section className="relative py-24 md:py-32">
+      <section className="relative z-10 py-24 md:py-32 bg-domain-bg">
         <div className="max-w-7xl mx-auto px-6">
           <SectionHeading
             eyebrow="Your World, Codified"
@@ -444,7 +451,7 @@ export default function Landing() {
       </section>
 
       {/* ─── 10. PRICING ─── */}
-      <section id="pricing" className="relative py-24 md:py-32 bg-domain-dark border-y border-domain-panel-border scroll-mt-16">
+      <section id="pricing" className="relative z-10 py-24 md:py-32 bg-domain-dark border-y border-domain-panel-border scroll-mt-16">
         <div className="max-w-7xl mx-auto px-6">
           {checkoutError && (
             <div className="max-w-2xl mx-auto mb-6 px-4 py-3 bg-red-900/20 border border-red-500/40 rounded-lg">
@@ -461,7 +468,7 @@ export default function Landing() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mt-14">
             {/* Free */}
             <div className="dm-panel-raised rounded-xl border p-6 flex flex-col">
-              <div className="font-cinzel text-eg4h-gold-dark uppercase tracking-widest text-xs mb-2">Free</div>
+              <div className="font-cinzel text-domain-parchment-dark md:text-eg4h-gold-dark uppercase tracking-widest text-xs mb-2">Free</div>
               <div className="font-cinzel-decorative text-3xl text-domain-text mb-1">$0</div>
               <div className="font-crimson italic text-domain-text-dim text-sm mb-5">Try before you commit.</div>
               <ul className="space-y-2 font-crimson text-sm text-domain-text mb-6 flex-1">
@@ -475,7 +482,7 @@ export default function Landing() {
 
             {/* Adventurer */}
             <div className="dm-panel-raised rounded-xl border p-6 flex flex-col">
-              <div className="font-cinzel text-eg4h-gold-dark uppercase tracking-widest text-xs mb-2">Adventurer</div>
+              <div className="font-cinzel text-domain-parchment-dark md:text-eg4h-gold-dark uppercase tracking-widest text-xs mb-2">Adventurer</div>
               <div className="font-cinzel-decorative text-3xl text-domain-text mb-1">$5.99<span className="text-base text-domain-text-dim">/mo</span></div>
               <div className="font-crimson italic text-domain-text-dim text-sm mb-5">For the DM building their first world.</div>
               <ul className="space-y-2 font-crimson text-sm text-domain-text mb-6 flex-1">
@@ -496,7 +503,7 @@ export default function Landing() {
               <div className="absolute -top-4 left-1/2 -translate-x-1/2 px-4 py-1 bg-eg4h-gold text-eg4h-black font-cinzel text-[10px] uppercase tracking-widest rounded-full whitespace-nowrap">
                 Most Popular
               </div>
-              <div className="font-cinzel text-eg4h-gold uppercase tracking-widest text-xs mb-2">Dungeon Master</div>
+              <div className="font-cinzel text-domain-parchment-dark md:text-eg4h-gold uppercase tracking-widest text-xs mb-2">Dungeon Master</div>
               <div className="font-cinzel-decorative text-3xl text-gold-gradient mb-1">$9.99<span className="text-base text-domain-text-dim">/mo</span></div>
               <div className="font-crimson italic text-domain-text-dim text-sm mb-5">Full DM tools, AI-assisted.</div>
               <ul className="space-y-2 font-crimson text-sm text-domain-text mb-6 flex-1">
@@ -514,7 +521,7 @@ export default function Landing() {
 
             {/* Bundle */}
             <div className="dm-panel-raised rounded-xl border p-6 flex flex-col">
-              <div className="font-cinzel text-eg4h-gold-dark uppercase tracking-widest text-xs mb-2">Bundle</div>
+              <div className="font-cinzel text-domain-parchment-dark md:text-eg4h-gold-dark uppercase tracking-widest text-xs mb-2">Bundle</div>
               <div className="font-cinzel-decorative text-3xl text-domain-text mb-1">$14.99<span className="text-base text-domain-text-dim">/mo</span></div>
               <div className="font-crimson italic text-domain-text-dim text-sm mb-5">DM's Domain + Character Evolver Pro.</div>
               <ul className="space-y-2 font-crimson text-sm text-domain-text mb-6 flex-1">
@@ -531,7 +538,7 @@ export default function Landing() {
       </section>
 
       {/* ─── 11. FINAL CTA ─── */}
-      <section className="relative py-24 md:py-40 overflow-hidden">
+      <section className="relative z-10 py-24 md:py-40 overflow-hidden bg-domain-bg">
         <div
           className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-30"
           style={{ backgroundImage: 'url(/bg-dmdlanding.png)' }}
@@ -556,7 +563,7 @@ export default function Landing() {
             <GoldButton onClick={handleLogin} variant="ghost">Log in</GoldButton>
           </div>
           <p className="mt-16 text-sm text-domain-text-dim font-ui">
-            An <span className="text-eg4h-gold-dark font-semibold">Evil Genius 4 Hire</span> production
+            An <span className="text-domain-parchment-dark md:text-eg4h-gold-dark font-semibold">Evil Genius 4 Hire</span> production
           </p>
         </div>
       </section>
