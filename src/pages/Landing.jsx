@@ -271,7 +271,7 @@ export default function Landing() {
       </section>
 
       {/* ─── 2. THE PROBLEM ─── */}
-      <section className="relative z-10 py-24 md:py-32 bg-domain-dark border-y border-domain-panel-border">
+      <section className="relative z-10 py-24 md:py-32 border-y border-domain-panel-border">
         <div className="max-w-3xl mx-auto px-6 text-center">
           <div className="font-cinzel text-domain-parchment-dark md:text-eg4h-gold-dark uppercase tracking-[0.3em] text-sm mb-6">The Problem</div>
           <h2 className="font-cinzel-decorative text-3xl md:text-5xl text-gold-gradient mb-8 leading-tight">
@@ -286,7 +286,7 @@ export default function Landing() {
       </section>
 
       {/* ─── 3. THE SESSION VIEW ─── */}
-      <section className="relative z-10 py-24 md:py-32 bg-domain-bg">
+      <section className="relative z-10 py-24 md:py-32">
         <div className="max-w-7xl mx-auto px-6">
           <SectionHeading
             eyebrow="At the Table"
@@ -318,7 +318,7 @@ export default function Landing() {
       </section>
 
       {/* ─── 4. AI IMPROV ASSIST ─── */}
-      <section className="relative z-10 py-24 md:py-32 bg-domain-dark border-y border-domain-panel-border">
+      <section className="relative z-10 py-24 md:py-32 border-y border-domain-panel-border">
         <div className="max-w-7xl mx-auto px-6">
           <SectionHeading
             eyebrow="Your Co-DM"
@@ -343,7 +343,7 @@ export default function Landing() {
       </section>
 
       {/* ─── 5. NPC GENERATION ─── */}
-      <section className="relative z-10 py-24 md:py-32 bg-domain-bg">
+      <section className="relative z-10 py-24 md:py-32">
         <div className="max-w-7xl mx-auto px-6">
           <SectionHeading
             eyebrow="Cast of Thousands"
@@ -365,7 +365,7 @@ export default function Landing() {
       </section>
 
       {/* ─── 6. YOUR PARTY ─── */}
-      <section className="relative z-10 py-24 md:py-32 bg-domain-dark border-y border-domain-panel-border">
+      <section className="relative z-10 py-24 md:py-32 border-y border-domain-panel-border">
         <div className="max-w-7xl mx-auto px-6">
           <SectionHeading
             eyebrow="Know Your Heroes"
@@ -387,7 +387,7 @@ export default function Landing() {
       </section>
 
       {/* ─── 7. INVITE & CONNECT ─── */}
-      <section className="relative z-10 py-24 md:py-32 bg-domain-bg">
+      <section className="relative z-10 py-24 md:py-32">
         <div className="max-w-7xl mx-auto px-6">
           <SectionHeading
             eyebrow="The Table"
@@ -409,7 +409,7 @@ export default function Landing() {
       </section>
 
       {/* ─── 8. PLAYER PORTAL ─── */}
-      <section className="relative z-10 py-24 md:py-32 bg-domain-dark border-y border-domain-panel-border">
+      <section className="relative z-10 py-24 md:py-32 border-y border-domain-panel-border">
         <div className="max-w-7xl mx-auto px-6">
           <SectionHeading
             eyebrow="For The Players"
@@ -431,7 +431,7 @@ export default function Landing() {
       </section>
 
       {/* ─── 9. HOMEBREW & WORLD LORE ─── */}
-      <section className="relative z-10 py-24 md:py-32 bg-domain-bg">
+      <section className="relative z-10 py-24 md:py-32">
         <div className="max-w-7xl mx-auto px-6">
           <SectionHeading
             eyebrow="Your World, Codified"
@@ -453,7 +453,7 @@ export default function Landing() {
       </section>
 
       {/* ─── 10. PRICING ─── */}
-      <section id="pricing" className="relative z-10 py-24 md:py-32 bg-domain-dark border-y border-domain-panel-border scroll-mt-16">
+      <section id="pricing" className="relative z-10 py-24 md:py-32 border-y border-domain-panel-border scroll-mt-16">
         <div className="max-w-7xl mx-auto px-6">
           {checkoutError && (
             <div className="max-w-2xl mx-auto mb-6 px-4 py-3 bg-red-900/20 border border-red-500/40 rounded-lg">
@@ -540,13 +540,7 @@ export default function Landing() {
       </section>
 
       {/* ─── 11. FINAL CTA ─── */}
-      <section className="relative z-10 py-24 md:py-40 overflow-hidden bg-domain-bg">
-        <div
-          className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-30"
-          style={{ backgroundImage: 'url(/bg-dmdlanding.png)' }}
-        />
-        <div className="absolute inset-0 bg-gradient-to-b from-domain-bg via-transparent to-domain-bg" />
-
+      <section className="relative z-10 py-24 md:py-40 overflow-hidden">
         <div className="relative z-10 max-w-3xl mx-auto px-6 text-center">
           <motion.h2
             className="font-cinzel-decorative text-4xl md:text-6xl text-gold-gradient mb-6 leading-tight"
