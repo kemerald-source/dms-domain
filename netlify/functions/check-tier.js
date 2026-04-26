@@ -33,6 +33,7 @@ export async function handler(event) {
 
   const { tier, source } = await resolveTier(email);
   const usage = await fetchUsage(email);
+  const quotaEnforced = process.env.AI_QUOTA_ENFORCED !== 'false';
 
   return {
     statusCode: 200,
@@ -41,6 +42,7 @@ export async function handler(event) {
       tier,
       limits: limitsForTier(tier),
       usage,
+      quotaEnforced,
       source,
     }),
   };

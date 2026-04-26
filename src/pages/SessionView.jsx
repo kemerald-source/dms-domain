@@ -210,7 +210,7 @@ export default function SessionView() {
   const [campaign, setCampaign] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState(() => localStorage.getItem('dmd-active-tab') || 'left');
-  const { tier, isDM, isPaid } = useTier(user?.email);
+  const { tier, isDM, isPaid, quotaEnforced, limits, aiRemaining, consumeAi } = useTier(user?.email);
   const [showUpgrade, setShowUpgrade] = useState(false);
   const [upgradeReason, setUpgradeReason] = useState('');
 
@@ -337,8 +337,12 @@ export default function SessionView() {
   const [expandedNoteId, setExpandedNoteId] = useState(null);
 
   // ─── Tier gate helpers ───────────────────────────────────────
-  // requireDM — gates AI features and Homebrew/Gallery (Dungeon Master only).
+  // requireDM — gates Homebrew/Gallery + secret messaging (Dungeon Master only).
   // requirePaid — gates paid organizational features (Adventurer or higher).
+  // requireAi  — gates AI features. Free tier gets the per-feature monthly
+  //              quota; Adventurer is locked out entirely; DM/Bundle pass.
+  //              When AI_QUOTA_ENFORCED is off server-side, this passes
+  //              everyone through.
   const requireDM = (reason) => {
     if (isDM) return true;
     setUpgradeReason(reason);
@@ -348,6 +352,19 @@ export default function SessionView() {
   const requirePaid = (reason) => {
     if (isPaid) return true;
     setUpgradeReason(reason);
+    setShowUpgrade(true);
+    return false;
+  };
+  const requireAi = (feature, exhaustedReason, tierReason) => {
+    if (!quotaEnforced || isDM) return true;
+    if (tier === 'adventurer') {
+      setUpgradeReason(tierReason);
+      setShowUpgrade(true);
+      return false;
+    }
+    // Free tier — quota-gated.
+    if (aiRemaining(feature) > 0) return true;
+    setUpgradeReason(exhaustedReason);
     setShowUpgrade(true);
     return false;
   };
@@ -1100,6 +1117,11 @@ export default function SessionView() {
 
   const embellishNpc = async () => {
     if (!npcForm.name.trim()) return;
+    if (!requireAi(
+      'npc_gen',
+      "You've used your free AI NPC generation for this month. Upgrade for unlimited.",
+      'AI Embellish is a Dungeon Master tier feature.'
+    )) return;
     setEmbellishing(true);
     try {
       const res = await fetch('/.netlify/functions/ai-npc-embellish', {
@@ -1131,6 +1153,7 @@ export default function SessionView() {
           location: data.npc.location || prev.location,
         }));
         setAiEmbellishedFields(data.aiFields || []);
+        consumeAi('npc_gen');
       }
     } catch (err) {
       console.error('NPC embellish error:', err);
@@ -1240,6 +1263,14 @@ export default function SessionView() {
       return;
     }
 
+    // If AI mode is on and the user is out of quota, open the upgrade modal
+    // instead of silently falling back to the template generator.
+    if (npcAiMode && !requireAi(
+      'npc_gen',
+      "You've used your free AI NPC generation for this month. Upgrade for unlimited, or toggle AI off to use the template generator.",
+      'AI-enhanced NPC generation is a Dungeon Master tier feature.'
+    )) return;
+
     setGeneratingNpc(true);
 
     const currentSession = sessionNotes.length > 0
@@ -1248,8 +1279,10 @@ export default function SessionView() {
 
     let npcData = null;
 
-    // AI generation when toggle is on and user has paid tier
-    if (npcAiMode && isDM) try {
+    // AI generation when toggle is on. Tier + quota are gated above and
+    // server-side; the template generator below is the fallback if the AI
+    // call fails for any reason (network, parse, etc).
+    if (npcAiMode) try {
       const res = await fetch('/.netlify/functions/ai-npc-embellish', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1265,7 +1298,10 @@ export default function SessionView() {
 
       if (res.ok) {
         const { npc } = await res.json();
-        if (npc?.name) npcData = npc;
+        if (npc?.name) {
+          npcData = npc;
+          consumeAi('npc_gen');
+        }
       }
     } catch (err) {
       console.warn('AI NPC generation failed, using template fallback:', err.message);
@@ -1785,7 +1821,11 @@ export default function SessionView() {
                 <button
                   onClick={async () => {
                     if (summaryLoading) return;
-                    if (!requireDM('AI session summaries are a Dungeon Master tier feature. Upgrade for AI-powered session recaps.')) return;
+                    if (!requireAi(
+                      'summary',
+                      "You've used your free AI summary for this month. Upgrade for unlimited.",
+                      'AI session summaries are a Dungeon Master tier feature. Upgrade for AI-powered session recaps.'
+                    )) return;
                     setSummaryLoading(true);
                     setSessionSummary(null);
                     try {
@@ -1807,6 +1847,7 @@ export default function SessionView() {
                         const summary = result || { narrative_summary: raw || 'Could not generate summary.' };
                         setSessionSummary(summary);
                         setSummaryExpanded(true);
+                        consumeAi('summary');
 
                         // Persist to this session note
                         await supabase
@@ -1830,6 +1871,11 @@ export default function SessionView() {
                   {summaryLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
                   {summaryLoading ? 'Generating...' : activeSummary ? 'Regenerate Summary' : 'Generate Summary'}
                 </button>
+                {quotaEnforced && tier === 'free' && limits?.aiSummaryQuota > 0 && (
+                  <span className="ml-2 text-[10px] font-ui text-domain-text-dim/60 self-center">
+                    {aiRemaining('summary')} of {limits.aiSummaryQuota} remaining this month
+                  </span>
+                )}
               </div>
             )}
           </div>
@@ -1867,10 +1913,11 @@ export default function SessionView() {
                   <p className="text-xs font-cinzel text-domain-text">Quick NPC Generator</p>
                   <button
                     onClick={() => {
-                      if (!npcAiMode && !isDM) {
-                        requireDM('AI-enhanced NPC generation is a Dungeon Master tier feature.');
-                        return;
-                      }
+                      if (!npcAiMode && !requireAi(
+                        'npc_gen',
+                        "You've used your free AI NPC generation for this month. Upgrade for unlimited.",
+                        'AI-enhanced NPC generation is a Dungeon Master tier feature.'
+                      )) return;
                       setNpcAiMode(v => !v);
                     }}
                     className="flex items-center gap-1.5 cursor-pointer"
@@ -1891,6 +1938,11 @@ export default function SessionView() {
                 />
                 <p className="text-[10px] font-ui mt-1 mb-2" style={{ color: npcAiMode ? 'rgba(212,160,23,0.6)' : 'rgba(255,255,255,0.25)' }}>
                   {npcAiMode ? 'AI will embellish your description' : 'Exact details only — no AI embellishment'}
+                  {npcAiMode && quotaEnforced && tier === 'free' && limits?.aiNpcGenQuota > 0 && (
+                    <span className="ml-2 text-domain-text-dim/60">
+                      ({aiRemaining('npc_gen')} of {limits.aiNpcGenQuota} remaining this month)
+                    </span>
+                  )}
                 </p>
                 <div className="flex gap-2">
                   <button
@@ -1923,10 +1975,11 @@ export default function SessionView() {
                   <p className="text-xs font-cinzel text-domain-text">Edit NPC</p>
                   <button
                     onClick={() => {
-                      if (!embellishMode && !isDM) {
-                        requireDM('AI Embellish is a Dungeon Master tier feature.');
-                        return;
-                      }
+                      if (!embellishMode && !requireAi(
+                        'npc_gen',
+                        "You've used your free AI NPC generation for this month. Upgrade for unlimited.",
+                        'AI Embellish is a Dungeon Master tier feature.'
+                      )) return;
                       setEmbellishMode(v => !v);
                       if (embellishMode) setAiEmbellishedFields([]);
                     }}
@@ -1938,6 +1991,11 @@ export default function SessionView() {
                     </div>
                   </button>
                 </div>
+                {embellishMode && quotaEnforced && tier === 'free' && limits?.aiNpcGenQuota > 0 && (
+                  <p className="text-[10px] font-ui text-domain-text-dim/60 mb-2 -mt-1">
+                    {aiRemaining('npc_gen')} of {limits.aiNpcGenQuota} AI NPC uses remaining this month
+                  </p>
+                )}
                 <div className="space-y-2">
                   <input type="text" placeholder="Name" value={npcForm.name} onChange={e => { setNpcForm(p => ({ ...p, name: e.target.value })); }} className={npcFieldClass} autoFocus />
                   <div className="grid grid-cols-2 gap-2">
@@ -2218,6 +2276,11 @@ export default function SessionView() {
       {/* AI Improv Assist */}
       <div className="shrink-0">
         <SectionHeader icon={Sparkles} title="AI Improv Assist">
+          {quotaEnforced && tier === 'free' && limits?.aiImprovQuota > 0 && (
+            <span className="text-[10px] font-ui text-domain-text-dim/60">
+              {aiRemaining('improv')} of {limits.aiImprovQuota} remaining this month
+            </span>
+          )}
           {isDM && improvCount > 0 && (
             <span className="text-[10px] font-ui text-domain-text-dim/60">{10 - improvCount}/10 remaining</span>
           )}
@@ -2238,7 +2301,11 @@ export default function SessionView() {
             disabled={improvLoading}
             onKeyDown={async (e) => {
               if (e.key !== 'Enter' || !improvInput.trim() || improvLoading) return;
-              if (!requireDM('AI Improv Assist is a Dungeon Master tier feature. Upgrade for AI-powered suggestions at the table.')) return;
+              if (!requireAi(
+                'improv',
+                "You've used your 3 free AI Improv assists for this month. Upgrade for unlimited.",
+                'AI Improv Assist is a Dungeon Master tier feature. Upgrade for AI-powered suggestions at the table.'
+              )) return;
               if (improvCount >= 10) { setImprovError('You\'ve used all 10 AI assists for this session. Start a new session to reset.'); return; }
               setImprovLoading(true);
               setImprovSuggestions([]);
@@ -2254,6 +2321,7 @@ export default function SessionView() {
                 if (res.ok && data.suggestions) {
                   setImprovSuggestions(data.suggestions);
                   setImprovCount(prev => prev + 1);
+                  consumeAi('improv');
                 } else {
                   setImprovError(data.error || 'Something went wrong. Try again.');
                 }
@@ -2267,7 +2335,11 @@ export default function SessionView() {
           <button
             onClick={async () => {
               if (!improvInput.trim() || improvLoading) return;
-              if (!requireDM('AI Improv Assist is a Dungeon Master tier feature. Upgrade for AI-powered suggestions at the table.')) return;
+              if (!requireAi(
+                'improv',
+                "You've used your 3 free AI Improv assists for this month. Upgrade for unlimited.",
+                'AI Improv Assist is a Dungeon Master tier feature. Upgrade for AI-powered suggestions at the table.'
+              )) return;
               if (improvCount >= 10) { setImprovError('You\'ve used all 10 AI assists for this session. Start a new session to reset.'); return; }
               setImprovLoading(true);
               setImprovSuggestions([]);
@@ -2283,6 +2355,7 @@ export default function SessionView() {
                 if (res.ok && data.suggestions) {
                   setImprovSuggestions(data.suggestions);
                   setImprovCount(prev => prev + 1);
+                  consumeAi('improv');
                 } else {
                   setImprovError(data.error || 'Something went wrong. Try again.');
                 }

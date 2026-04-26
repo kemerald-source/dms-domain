@@ -41,9 +41,17 @@ export const STRIPE_PRICES = {
  */
 const DM_TIER_FEATURES = new Set(['dungeon_master', 'bundle']);
 
+const AI_FEATURE_KEYS = {
+  improv:  { limitKey: 'aiImprovQuota',  usageKey: 'improvUsed'  },
+  npc_gen: { limitKey: 'aiNpcGenQuota',  usageKey: 'npcGenUsed'  },
+  summary: { limitKey: 'aiSummaryQuota', usageKey: 'summaryUsed' },
+};
+
 export function useTier(userEmail) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+
+  const cacheKey = userEmail ? `dmd-tier-${userEmail.toLowerCase()}` : null;
 
   useEffect(() => {
     if (!userEmail) {
@@ -58,8 +66,7 @@ export function useTier(userEmail) {
       return;
     }
 
-    const cacheKey = `dmd-tier-${userEmail.toLowerCase()}`;
-    const cached = sessionStorage.getItem(cacheKey);
+    const cached = cacheKey && sessionStorage.getItem(cacheKey);
     if (cached) {
       try {
         const parsed = JSON.parse(cached);
@@ -82,16 +89,46 @@ export function useTier(userEmail) {
           tier: payload.tier || 'free',
           limits: payload.limits,
           usage: payload.usage,
+          quotaEnforced: payload.quotaEnforced !== false,
         };
         setData(next);
-        sessionStorage.setItem(cacheKey, JSON.stringify({ data: next, ts: Date.now() }));
+        if (cacheKey) sessionStorage.setItem(cacheKey, JSON.stringify({ data: next, ts: Date.now() }));
       })
       .catch(() => setData({ tier: 'free' }))
       .finally(() => setLoading(false));
-  }, [userEmail]);
+  }, [userEmail, cacheKey]);
 
   const resolved = data?.tier || 'free';
   const hasDmFeatures = DM_TIER_FEATURES.has(resolved);
+
+  // Optimistic local-only increment after a successful AI call. Updates the
+  // pill immediately and invalidates sessionStorage so the next page load
+  // refetches authoritative usage from the server.
+  function consumeAi(feature) {
+    const map = AI_FEATURE_KEYS[feature];
+    if (!map) return;
+    setData(prev => {
+      if (!prev) return prev;
+      const usage = { ...(prev.usage || {}) };
+      usage[map.usageKey] = (usage[map.usageKey] || 0) + 1;
+      const next = { ...prev, usage };
+      if (cacheKey) {
+        try { sessionStorage.removeItem(cacheKey); } catch { /* ignore */ }
+      }
+      return next;
+    });
+  }
+
+  // Returns -1 (unlimited), 0 (exhausted), or a positive integer.
+  function aiRemaining(feature) {
+    const map = AI_FEATURE_KEYS[feature];
+    if (!map || !data?.limits) return -1;
+    const limit = data.limits[map.limitKey];
+    if (limit === -1) return -1;
+    if (limit <= 0) return 0;
+    const used = data.usage?.[map.usageKey] || 0;
+    return Math.max(0, limit - used);
+  }
 
   return {
     tier: resolved,
@@ -108,5 +145,11 @@ export function useTier(userEmail) {
     // Server-returned limits + AI usage (undefined while loading or on error)
     limits: data?.limits,
     usage: data?.usage,
+    // True when the server is enforcing the AI quota gate. UI hides quota
+    // pills and skips quota-based blocking when this is false.
+    quotaEnforced: data?.quotaEnforced !== false,
+    // Helpers for AI quota UI / gating.
+    aiRemaining,
+    consumeAi,
   };
 }
