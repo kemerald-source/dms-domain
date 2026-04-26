@@ -62,41 +62,41 @@ export async function handler(event) {
   }
 
   const { type, data } = stripeEvent;
-  const subscription = data?.object;
+  const obj = data?.object;
 
-  // Only process subscription events for DMD/Bundle products
-  const relevantEvents = [
+  // Subscription lifecycle events — no DB writes; check-tier reads Stripe in
+  // real time so a fresh tier check picks up the change on the user's next
+  // request. We log for audit + future hook points (welcome emails, etc.).
+  const subscriptionEvents = [
     'customer.subscription.created',
     'customer.subscription.updated',
     'customer.subscription.deleted',
   ];
 
-  if (!relevantEvents.includes(type)) {
-    return { statusCode: 200, body: JSON.stringify({ received: true, ignored: true }) };
+  if (subscriptionEvents.includes(type)) {
+    if (!obj || !isDmdSubscription(obj)) {
+      return { statusCode: 200, body: JSON.stringify({ received: true, ignored: true, reason: 'not a DMD subscription' }) };
+    }
+    const customerEmail = obj.customer_email || 'unknown';
+    console.log(`Stripe webhook: ${type} — customer=${obj.customer}, email=${customerEmail}, status=${obj.status}`);
+    return {
+      statusCode: 200,
+      body: JSON.stringify({ received: true, event: type, customer: obj.customer, status: obj.status }),
+    };
   }
 
-  if (!subscription || !isDmdSubscription(subscription)) {
-    return { statusCode: 200, body: JSON.stringify({ received: true, ignored: true, reason: 'not a DMD subscription' }) };
+  // Failed payment — log for support visibility. Stripe retries automatically;
+  // we don't take action here. (Customer email + dunning UX are a follow-up.)
+  if (type === 'invoice.payment_failed') {
+    const subId = obj?.subscription;
+    const amountDue = obj?.amount_due;
+    const attempt = obj?.attempt_count;
+    console.log(`Stripe webhook: invoice.payment_failed — customer=${obj?.customer}, email=${obj?.customer_email || 'unknown'}, sub=${subId}, attempt=${attempt}, amount_due=${amountDue}`);
+    return {
+      statusCode: 200,
+      body: JSON.stringify({ received: true, event: type, customer: obj?.customer, attempt }),
+    };
   }
 
-  // Log the event for debugging
-  const customerEmail = subscription.customer_email || 'unknown';
-  const status = subscription.status;
-  console.log(`Stripe webhook: ${type} — customer=${subscription.customer}, email=${customerEmail}, status=${status}`);
-
-  // The tier system uses real-time Stripe API checks (check-tier.js),
-  // so no database updates are needed here. The webhook serves as:
-  // 1. An audit log (console.log above)
-  // 2. A hook point for future features (e.g., welcome emails, provisioning)
-  // 3. Cache invalidation — if we add server-side tier caching later
-
-  return {
-    statusCode: 200,
-    body: JSON.stringify({
-      received: true,
-      event: type,
-      customer: subscription.customer,
-      status,
-    }),
-  };
+  return { statusCode: 200, body: JSON.stringify({ received: true, ignored: true }) };
 }
