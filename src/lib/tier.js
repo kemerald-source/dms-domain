@@ -22,6 +22,7 @@ export const CAMPAIGN_LIMITS = {
   free: 1,
   adventurer: 3,
   dungeon_master: 6,
+  bundle: 6,
 };
 
 // ─── Stripe price IDs (for checkout) ─────────────────────────
@@ -33,23 +34,26 @@ export const STRIPE_PRICES = {
 };
 
 /**
- * React hook that fetches and caches the user's tier.
- * Tier values: 'free' | 'adventurer' | 'dungeon_master'.
- * Bundle subscribers come back as 'dungeon_master' — feature access is identical.
+ * React hook that fetches and caches the user's tier + limits + AI usage.
+ * Tier values: 'free' | 'adventurer' | 'dungeon_master' | 'bundle'.
+ * Bundle and Dungeon Master have identical DMD feature access; Bundle is a
+ * distinct value so the CE app can grant its cross-app perk.
  */
+const DM_TIER_FEATURES = new Set(['dungeon_master', 'bundle']);
+
 export function useTier(userEmail) {
-  const [tier, setTier] = useState(null);
+  const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!userEmail) {
-      setTier('free');
+      setData({ tier: 'free' });
       setLoading(false);
       return;
     }
 
     if (ADMIN_EMAILS.includes(userEmail.toLowerCase())) {
-      setTier('dungeon_master');
+      setData({ tier: 'bundle' });
       setLoading(false);
       return;
     }
@@ -58,9 +62,9 @@ export function useTier(userEmail) {
     const cached = sessionStorage.getItem(cacheKey);
     if (cached) {
       try {
-        const { tier: cachedTier, ts } = JSON.parse(cached);
-        if (Date.now() - ts < 10 * 60 * 1000) {
-          setTier(cachedTier);
+        const parsed = JSON.parse(cached);
+        if (Date.now() - parsed.ts < 10 * 60 * 1000) {
+          setData(parsed.data);
           setLoading(false);
           return;
         }
@@ -73,28 +77,36 @@ export function useTier(userEmail) {
       body: JSON.stringify({ email: userEmail }),
     })
       .then(res => res.json())
-      .then(data => {
-        const t = data.tier || 'free';
-        setTier(t);
-        sessionStorage.setItem(cacheKey, JSON.stringify({ tier: t, ts: Date.now() }));
+      .then(payload => {
+        const next = {
+          tier: payload.tier || 'free',
+          limits: payload.limits,
+          usage: payload.usage,
+        };
+        setData(next);
+        sessionStorage.setItem(cacheKey, JSON.stringify({ data: next, ts: Date.now() }));
       })
-      .catch(() => setTier('free'))
+      .catch(() => setData({ tier: 'free' }))
       .finally(() => setLoading(false));
   }, [userEmail]);
 
-  const resolved = tier || 'free';
-  const isDM = resolved === 'dungeon_master';
+  const resolved = data?.tier || 'free';
+  const hasDmFeatures = DM_TIER_FEATURES.has(resolved);
 
   return {
     tier: resolved,
     loading,
     // Paying customer (any paid tier, including Adventurer)
     isPaid: resolved !== 'free',
-    // Has AI — Dungeon Master tier only (Bundle collapses to 'dungeon_master')
-    hasAi: isDM,
-    // DM-exclusive features (Homebrew, Gallery) — same set as hasAi today
-    isDM,
+    // AI features — Dungeon Master and Bundle
+    hasAi: hasDmFeatures,
+    // DM-exclusive features (Homebrew, Gallery) — same set as hasAi today;
+    // kept for callsite compatibility, also true for Bundle subscribers.
+    isDM: hasDmFeatures,
     // Active-campaign limit for this tier
     campaignLimit: CAMPAIGN_LIMITS[resolved] ?? CAMPAIGN_LIMITS.free,
+    // Server-returned limits + AI usage (undefined while loading or on error)
+    limits: data?.limits,
+    usage: data?.usage,
   };
 }

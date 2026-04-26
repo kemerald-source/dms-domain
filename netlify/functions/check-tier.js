@@ -1,14 +1,27 @@
 // ─── DMD Tier Check — Netlify Serverless Function ────────────
-// Resolves a user's tier from admin list or active Stripe subscriptions.
-// Returns: 'free' | 'adventurer' | 'dungeon_master'.
+// Resolves a user's tier from admin list or active Stripe subscriptions and
+// returns the canonical limits + current-month AI usage for that user.
+//
+// Response shape:
+//   { tier, limits, usage, source }
+// where tier is one of 'free' | 'adventurer' | 'dungeon_master' | 'bundle'.
 
-import { isAdmin, tierForProduct, highestTier } from './_tierConfig.js';
+import { createClient } from '@supabase/supabase-js';
+import {
+  isAdmin,
+  tierForProduct,
+  highestTier,
+  limitsForTier,
+  currentMonthKey,
+} from './_tierConfig.js';
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'Content-Type',
   'Access-Control-Allow-Methods': 'POST',
 };
+
+const ZERO_USAGE = { improvUsed: 0, npcGenUsed: 0, summaryUsed: 0 };
 
 export async function handler(event) {
   if (event.httpMethod === 'OPTIONS') return { statusCode: 204, headers: cors };
@@ -25,14 +38,30 @@ export async function handler(event) {
     return { statusCode: 400, headers: cors, body: JSON.stringify({ error: 'Email required' }) };
   }
 
-  // Admin override → top tier
+  // Resolve tier first (admin override, then Stripe lookup, then free fallback).
+  const { tier, source } = await resolveTier(email);
+
+  // Fetch this user's current-month AI usage. Errors are non-fatal — return
+  // zero usage rather than failing the whole request.
+  const usage = await fetchUsage(email);
+
+  return respond({
+    tier,
+    limits: limitsForTier(tier),
+    usage,
+    source,
+  });
+}
+
+async function resolveTier(email) {
+  // Admin override → top tier (Bundle, so CE-side cross-app checks pass).
   if (isAdmin(email)) {
-    return json({ tier: 'dungeon_master', source: 'admin' });
+    return { tier: 'bundle', source: 'admin' };
   }
 
   const stripeKey = process.env.STRIPE_SECRET_KEY;
   if (!stripeKey) {
-    return json({ tier: 'free', source: 'no_stripe_key' });
+    return { tier: 'free', source: 'no_stripe_key' };
   }
 
   try {
@@ -41,9 +70,8 @@ export async function handler(event) {
       { headers: { Authorization: `Bearer ${stripeKey}` } }
     );
     const custData = await custRes.json();
-    if (!custData.data?.length) return json({ tier: 'free', source: 'no_customer' });
+    if (!custData.data?.length) return { tier: 'free', source: 'no_customer' };
 
-    // Collect every tier this email has an active sub for; return the highest.
     const foundTiers = [];
     for (const customer of custData.data) {
       const subRes = await fetch(
@@ -60,15 +88,39 @@ export async function handler(event) {
     }
 
     const best = highestTier(foundTiers);
-    if (best) return json({ tier: best, source: 'stripe' });
-    return json({ tier: 'free', source: 'no_subscription' });
+    if (best) return { tier: best, source: 'stripe' };
+    return { tier: 'free', source: 'no_subscription' };
   } catch (err) {
     console.error('Stripe check error:', err);
-    return json({ tier: 'free', source: 'error' });
+    return { tier: 'free', source: 'error' };
   }
 }
 
-function json(payload) {
+async function fetchUsage(email) {
+  const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+  const supabaseKey = process.env.SUPABASE_SERVICE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+  if (!supabaseUrl || !supabaseKey) return { ...ZERO_USAGE };
+
+  try {
+    const supabase = createClient(supabaseUrl, supabaseKey);
+    const { data } = await supabase
+      .from('user_ai_usage')
+      .select('improv_count, npc_gen_count, summary_count')
+      .eq('user_email', email)
+      .eq('month_key', currentMonthKey())
+      .maybeSingle();
+    return {
+      improvUsed: data?.improv_count || 0,
+      npcGenUsed: data?.npc_gen_count || 0,
+      summaryUsed: data?.summary_count || 0,
+    };
+  } catch (err) {
+    console.error('Usage fetch error:', err);
+    return { ...ZERO_USAGE };
+  }
+}
+
+function respond(payload) {
   return {
     statusCode: 200,
     headers: { ...cors, 'Content-Type': 'application/json' },
