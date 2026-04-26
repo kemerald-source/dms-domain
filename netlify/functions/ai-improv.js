@@ -3,7 +3,7 @@
 // Fetches party, NPCs, threads, sessions, lore, and DM notes from Supabase.
 
 import { createClient } from '@supabase/supabase-js';
-import { AI_PRODUCT_IDS, isAdmin } from './_tierConfig.js';
+import { gateAi } from './_tierResolve.js';
 
 const SYSTEM_PROMPT = `You are the AI assistant inside DM's Domain, a D&D 5e Dungeon Master companion tool. The DM is in a live session and needs immediate help responding to something unexpected.
 
@@ -26,37 +26,6 @@ Respond ONLY with valid JSON, no preamble, no markdown:
   {"label": "short 2-3 word label", "approach": "redirect", "text": "2-3 sentence suggestion", "connection": "what campaign element this ties to"},
   {"label": "short 2-3 word label", "approach": "deepen", "text": "2-3 sentence suggestion", "connection": "what campaign element this ties to"}
 ]`;
-
-// ─── Tier verification ──────────────────────────────────────────
-
-// AI Improv Assist requires Dungeon Master tier or Bundle. Adventurer excluded.
-async function verifyAiTier(email) {
-  if (isAdmin(email)) return true;
-
-  const stripeKey = process.env.STRIPE_SECRET_KEY;
-  if (!stripeKey) return false;
-
-  const custRes = await fetch(
-    `https://api.stripe.com/v1/customers?email=${encodeURIComponent(email)}&limit=5`,
-    { headers: { Authorization: `Bearer ${stripeKey}` } }
-  );
-  const custData = await custRes.json();
-  if (!custData.data?.length) return false;
-
-  for (const customer of custData.data) {
-    const subRes = await fetch(
-      `https://api.stripe.com/v1/subscriptions?customer=${customer.id}&status=active&limit=10`,
-      { headers: { Authorization: `Bearer ${stripeKey}` } }
-    );
-    const subData = await subRes.json();
-    for (const sub of (subData.data || [])) {
-      for (const item of (sub.items?.data || [])) {
-        if (AI_PRODUCT_IDS.has(item.price?.product)) return true;
-      }
-    }
-  }
-  return false;
-}
 
 // ─── Context fetching ───────────────────────────────────────────
 
@@ -304,16 +273,9 @@ export async function handler(event) {
     return { statusCode: 400, headers: corsHeaders, body: JSON.stringify({ error: 'userEmail is required' }) };
   }
 
-  // Verify paid tier
-  try {
-    const hasTier = await verifyAiTier(userEmail);
-    if (!hasTier) {
-      return { statusCode: 403, headers: corsHeaders, body: JSON.stringify({ error: 'AI Improv Assist requires Dungeon Master tier. Adventurer tier does not include AI features.' }) };
-    }
-  } catch (err) {
-    console.error('Tier check error:', err);
-    return { statusCode: 500, headers: corsHeaders, body: JSON.stringify({ error: 'Could not verify subscription status' }) };
-  }
+  // Tier + quota gate (free: 3/mo, Adventurer: blocked, DM/Bundle: unlimited)
+  const gate = await gateAi({ email: userEmail, feature: 'improv', corsHeaders });
+  if (gate.blocked) return gate.blocked;
 
   // Fetch campaign context from Supabase
   const supabase = createClient(supabaseUrl, supabaseKey);
@@ -390,10 +352,12 @@ export async function handler(event) {
       };
     }
 
+    await gate.recordUsage();
+
     return {
       statusCode: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ suggestions }),
+      body: JSON.stringify({ suggestions, tier: gate.tier }),
     };
   } catch (err) {
     console.error('AI improv error:', err);

@@ -62,39 +62,12 @@ function buildUserMessage(type, prompt, context) {
   return msg;
 }
 
-// ─── Tier verification ─────────────────────────────────────────
-// AI features require Dungeon Master tier or Bundle (or legacy DM/Bundle).
-// Adventurer is paid but does NOT get AI — enforced here server-side.
-import { AI_PRODUCT_IDS, isAdmin } from './_tierConfig.js';
+// ─── Tier + quota gate ─────────────────────────────────────────
+// All three AI types are quota-gated. Free tier gets the per-month allotments
+// from the spec; Adventurer is paid but excluded from AI; DM/Bundle unlimited.
+import { gateAi } from './_tierResolve.js';
 
-async function verifyAiTier(email) {
-  if (!email) return false;
-  if (isAdmin(email)) return true;
-  const stripeKey = process.env.STRIPE_SECRET_KEY;
-  if (!stripeKey) return false;
-  try {
-    const custRes = await fetch(`https://api.stripe.com/v1/customers/search?query=email:'${encodeURIComponent(email)}'`, {
-      headers: { Authorization: `Bearer ${stripeKey}` },
-    });
-    const custData = await custRes.json();
-    if (!custData.data?.length) return false;
-    for (const customer of custData.data) {
-      const subRes = await fetch(`https://api.stripe.com/v1/subscriptions?customer=${customer.id}&status=active&limit=10`, {
-        headers: { Authorization: `Bearer ${stripeKey}` },
-      });
-      const subData = await subRes.json();
-      for (const sub of (subData.data || [])) {
-        for (const item of (sub.items?.data || [])) {
-          if (AI_PRODUCT_IDS.has(item.price?.product)) return true;
-        }
-      }
-    }
-  } catch (e) { console.error('Stripe tier check error:', e); }
-  return false;
-}
-
-// AI-gated types that require paid tier
-const PAID_TYPES = ['summary', 'improv'];
+const TYPE_TO_FEATURE = { npc: 'npc_gen', improv: 'improv', summary: 'summary' };
 
 export async function handler(event) {
   const corsHeaders = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'Content-Type', 'Access-Control-Allow-Methods': 'POST' };
@@ -121,21 +94,17 @@ export async function handler(event) {
 
   const { type, prompt, context, userEmail } = body;
 
-  // Tier gate for AI-powered features — requires Dungeon Master or Bundle.
-  if (PAID_TYPES.includes(type) && userEmail) {
-    const hasAi = await verifyAiTier(userEmail);
-    if (!hasAi) {
-      return { statusCode: 403, headers: corsHeaders, body: JSON.stringify({ error: `AI ${type} requires Dungeon Master tier. Adventurer tier does not include AI features.` }) };
-    }
-  }
-
   if (!type || !SYSTEM_PROMPTS[type]) {
-    return { statusCode: 400, body: JSON.stringify({ error: 'Invalid type. Must be: npc, improv, or summary' }) };
+    return { statusCode: 400, headers: corsHeaders, body: JSON.stringify({ error: 'Invalid type. Must be: npc, improv, or summary' }) };
+  }
+  if (!prompt && type !== 'summary') {
+    return { statusCode: 400, headers: corsHeaders, body: JSON.stringify({ error: 'Prompt is required' }) };
   }
 
-  if (!prompt && type !== 'summary') {
-    return { statusCode: 400, body: JSON.stringify({ error: 'Prompt is required' }) };
-  }
+  // Tier + quota gate (free tier gets per-feature monthly allotments;
+  // Adventurer blocked; DM/Bundle unlimited).
+  const gate = await gateAi({ email: userEmail, feature: TYPE_TO_FEATURE[type], corsHeaders });
+  if (gate.blocked) return gate.blocked;
 
   const userMessage = buildUserMessage(type, prompt, context);
   const maxTokens = type === 'summary' ? 2048 : 1024;
@@ -172,22 +141,25 @@ export async function handler(event) {
     // Strip markdown code fences if present
     text = text.replace(/^```(?:json)?\s*\n?/i, '').replace(/\n?```\s*$/i, '').trim();
 
+    // Anthropic returned 200 with content — burn the quota whether or not
+    // the JSON parse succeeds (raw text is still a usable response).
+    await gate.recordUsage();
+
     let parsed;
     try {
       parsed = JSON.parse(text);
     } catch {
-      // If JSON parsing fails, return raw text
       return {
         statusCode: 200,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ raw: text }),
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ raw: text, tier: gate.tier }),
       };
     }
 
     return {
       statusCode: 200,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ result: parsed }),
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ result: parsed, tier: gate.tier }),
     };
   } catch (err) {
     console.error('AI assist error:', err);

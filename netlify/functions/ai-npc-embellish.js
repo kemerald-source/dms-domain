@@ -3,7 +3,7 @@
 // Preserves everything the DM explicitly wrote; AI only fills gaps.
 
 import { createClient } from '@supabase/supabase-js';
-import { AI_PRODUCT_IDS, isAdmin } from './_tierConfig.js';
+import { gateAi } from './_tierResolve.js';
 
 const SYSTEM_PROMPT = `You are the NPC embellishment engine inside DM's Domain, a D&D 5e campaign management tool. The DM has created a rough NPC and wants you to flesh it out.
 
@@ -26,37 +26,6 @@ Return a JSON object with these fields (include ALL fields even if unchanged):
 }
 
 Respond ONLY with valid JSON, no preamble, no markdown.`;
-
-// ─── Tier verification ──────────────────────────────────────────
-
-// AI NPC embellishment requires Dungeon Master tier or Bundle. Adventurer excluded.
-async function verifyAiTier(email) {
-  if (isAdmin(email)) return true;
-
-  const stripeKey = process.env.STRIPE_SECRET_KEY;
-  if (!stripeKey) return false;
-
-  const custRes = await fetch(
-    `https://api.stripe.com/v1/customers?email=${encodeURIComponent(email)}&limit=5`,
-    { headers: { Authorization: `Bearer ${stripeKey}` } }
-  );
-  const custData = await custRes.json();
-  if (!custData.data?.length) return false;
-
-  for (const customer of custData.data) {
-    const subRes = await fetch(
-      `https://api.stripe.com/v1/subscriptions?customer=${customer.id}&status=active&limit=10`,
-      { headers: { Authorization: `Bearer ${stripeKey}` } }
-    );
-    const subData = await subRes.json();
-    for (const sub of (subData.data || [])) {
-      for (const item of (sub.items?.data || [])) {
-        if (AI_PRODUCT_IDS.has(item.price?.product)) return true;
-      }
-    }
-  }
-  return false;
-}
 
 // ─── Context fetching (lightweight — just what NPC generation needs) ─
 
@@ -132,15 +101,9 @@ export async function handler(event) {
     return { statusCode: 400, headers: corsHeaders, body: JSON.stringify({ error: 'campaignId, userEmail, and npcInput.name are required' }) };
   }
 
-  // Verify tier
-  try {
-    if (!(await verifyAiTier(userEmail))) {
-      return { statusCode: 403, headers: corsHeaders, body: JSON.stringify({ error: 'AI NPC Embellish requires Dungeon Master tier. Adventurer tier does not include AI features.' }) };
-    }
-  } catch (err) {
-    console.error('Tier check error:', err);
-    return { statusCode: 500, headers: corsHeaders, body: JSON.stringify({ error: 'Could not verify subscription' }) };
-  }
+  // Tier + quota gate (free: 1/mo, Adventurer: blocked, DM/Bundle: unlimited)
+  const gate = await gateAi({ email: userEmail, feature: 'npc_gen', corsHeaders });
+  if (gate.blocked) return gate.blocked;
 
   // Fetch campaign context
   const supabase = createClient(supabaseUrl, supabaseKey);
@@ -210,10 +173,12 @@ export async function handler(event) {
       if (aiVal && (!dmVal || aiVal !== dmVal)) aiFields.push(key);
     }
 
+    await gate.recordUsage();
+
     return {
       statusCode: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ npc, aiFields }),
+      body: JSON.stringify({ npc, aiFields, tier: gate.tier }),
     };
   } catch (err) {
     console.error('NPC embellish error:', err);
