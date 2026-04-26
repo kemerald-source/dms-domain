@@ -26,9 +26,14 @@ export async function handler(event) {
     return { statusCode: 400, headers: corsHeaders, body: JSON.stringify({ error: 'email and plan are required' }) };
   }
 
-  const priceId = STRIPE_PRICES[plan];
+  // Accept the canonical tier enum value 'dungeon_master' as an alias for
+  // the existing shorter 'dm' key. Frontend still sends 'dm'; this lets
+  // future callers (CE cross-app, scripts) use the spec'd tier names directly.
+  const PLAN_ALIASES = { dungeon_master: 'dm' };
+  const planKey = PLAN_ALIASES[plan] || plan;
+  const priceId = STRIPE_PRICES[planKey];
   if (!priceId) {
-    return { statusCode: 400, headers: corsHeaders, body: JSON.stringify({ error: 'Invalid plan. Must be: adventurer, dm, or bundle' }) };
+    return { statusCode: 400, headers: corsHeaders, body: JSON.stringify({ error: 'Invalid plan. Must be: adventurer, dm (or dungeon_master), or bundle' }) };
   }
 
   try {
@@ -55,7 +60,7 @@ export async function handler(event) {
       customerId = createData.id;
     }
 
-    console.log(`[create-checkout] Plan: ${plan}, Price: ${priceId}, Customer: ${customerId}`);
+    console.log(`[create-checkout] Plan: ${planKey} (requested ${plan}), Price: ${priceId}, Customer: ${customerId}`);
 
     // Create checkout session
     const params = new URLSearchParams({
