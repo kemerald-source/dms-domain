@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useAuth } from '@/api/AuthContext';
 import Lightbox from '@/components/Lightbox';
+import Footer from '@/components/Footer';
 import { startCheckout, stashIntendedPlan } from '@/lib/checkout';
 
 // A single clickable screenshot. `variant`:
@@ -563,6 +564,8 @@ export default function Landing() {
           </p>
         </div>
       </section>
+
+      <Footer />
     </div>
   );
 }

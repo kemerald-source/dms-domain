@@ -6,6 +6,7 @@ import { useAuth } from '@/api/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { useTier, FREE_LIMITS } from '@/lib/tier';
 import UpgradeModal from '@/components/UpgradeModal';
+import Footer from '@/components/Footer';
 import { startCheckout, readIntendedPlan, clearIntendedPlan } from '@/lib/checkout';
 
 function relativeTime(date) {
@@ -218,7 +219,7 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="dm-study-bg min-h-screen">
+    <div className="dm-study-bg min-h-screen flex flex-col">
       {/* Header */}
       <header className="border-b border-domain-panel-border/60 bg-domain-dark/90 backdrop-blur-sm sticky top-0 z-20 dm-header-glow relative">
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
@@ -248,7 +249,7 @@ export default function Dashboard() {
       </header>
 
       {/* Main content */}
-      <main className="max-w-6xl mx-auto px-6 py-10 relative z-10">
+      <main className="flex-1 w-full max-w-6xl mx-auto px-6 py-10 relative z-10">
         <div className="flex items-center justify-between mb-8">
           <h2 className="font-cinzel text-2xl md:text-3xl text-domain-text">Your Campaigns</h2>
           <button
@@ -495,6 +496,8 @@ export default function Dashboard() {
           reason={upgradeReason}
         />
       )}
+
+      <Footer />
     </div>
   );
 }

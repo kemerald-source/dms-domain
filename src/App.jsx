@@ -4,6 +4,7 @@ import Dashboard from '@/pages/Dashboard';
 import SessionView from '@/pages/SessionView';
 import PlayerView from '@/pages/PlayerView';
 import DemoSessionView from '@/pages/DemoSessionView';
+import Changelog from '@/pages/Changelog';
 
 export default function App() {
   return (
@@ -13,6 +14,7 @@ export default function App() {
       <Route path="/dashboard" element={<Dashboard />} />
       <Route path="/campaign/:id/session" element={<SessionView />} />
       <Route path="/campaign/:id/player" element={<PlayerView />} />
+      <Route path="/changelog" element={<Changelog />} />
     </Routes>
   );
 }
