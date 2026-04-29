@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 
-const DISCORD_URL = 'https://discord.gg/evilgenius4hire';
+const DISCORD_URL = 'https://discord.gg/KeGKQjKPN5';
 
 export default function Footer() {
   return (
