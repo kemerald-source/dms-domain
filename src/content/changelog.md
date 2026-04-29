@@ -2,6 +2,9 @@
 
 ## April 2026
 
+**April 29**
+- Added: content moderation reporting on campaign gallery uploads.
+
 **April 27**
 - Fixed: tier status now updates automatically when returning to the app from Stripe checkout (no more browser refresh needed).
 - Fixed: post-checkout success page now retries up to 3 times if Stripe is slow to register the subscription.

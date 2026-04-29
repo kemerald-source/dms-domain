@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Loader2, Users, Scroll, Image as ImageIcon, Shield, Heart, Eye, ScrollText, X, MapPin, Crown } from 'lucide-react';
+import { Loader2, Users, Scroll, Image as ImageIcon, Shield, Heart, Eye, ScrollText, X, MapPin, Crown, Flag } from 'lucide-react';
 import { useAuth } from '@/api/AuthContext';
 import { supabase } from '@/lib/supabase';
 import InitialAvatar from '@/components/InitialAvatar';
@@ -48,6 +48,8 @@ export default function PlayerView() {
   const [sharedImages, setSharedImages] = useState([]);
   const [npcs, setNpcs] = useState([]);
   const [previewImage, setPreviewImage] = useState(null);
+  // Gallery report modal — populated with the image record being reported
+  const [reportingImage, setReportingImage] = useState(null);
 
   // Auth guard — redirect to login if not signed in
   useEffect(() => {
@@ -483,23 +485,33 @@ export default function PlayerView() {
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
               {sharedImages.map(img => (
-                <button
-                  key={img.id}
-                  type="button"
-                  onClick={() => setPreviewImage({ url: img.image_url, caption: img.caption })}
-                  className="group relative cursor-pointer text-left"
-                >
-                  <img
-                    src={img.image_url}
-                    alt={img.caption || 'Campaign image'}
-                    className="w-full aspect-square object-cover rounded-lg border border-domain-panel-border/40 group-hover:border-domain-amber/40 transition-colors"
-                  />
-                  {img.caption && (
-                    <p className="text-[10px] font-crimson text-domain-text-dim/70 truncate mt-1">
-                      {img.caption}
-                    </p>
-                  )}
-                </button>
+                <div key={img.id} className="group relative">
+                  <button
+                    type="button"
+                    onClick={() => setPreviewImage({ url: img.image_url, caption: img.caption })}
+                    className="block w-full cursor-pointer text-left"
+                  >
+                    <img
+                      src={img.image_url}
+                      alt={img.caption || 'Campaign image'}
+                      className="w-full aspect-square object-cover rounded-lg border border-domain-panel-border/40 group-hover:border-domain-amber/40 transition-colors"
+                    />
+                    {img.caption && (
+                      <p className="text-[10px] font-crimson text-domain-text-dim/70 truncate mt-1">
+                        {img.caption}
+                      </p>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setReportingImage(img)}
+                    className="absolute top-1 right-1 w-6 h-6 bg-domain-dark/80 border border-domain-panel-border/50 rounded flex items-center justify-center text-domain-text-dim/70 hover:text-domain-amber opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity cursor-pointer"
+                    title="Report this image"
+                    aria-label="Report this image"
+                  >
+                    <Flag className="w-3 h-3" />
+                  </button>
+                </div>
               ))}
             </div>
           )}
@@ -582,6 +594,175 @@ export default function PlayerView() {
           </div>
         </div>
       )}
+
+      {/* Gallery report modal */}
+      {reportingImage && (
+        <PlayerGalleryReportModal
+          image={reportingImage}
+          campaign={campaign}
+          reporterEmail={user?.email || null}
+          onClose={() => setReportingImage(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─── Gallery report modal (players report inappropriate uploads) ──
+const PLAYER_GALLERY_REPORT_REASONS = [
+  { id: 'inappropriate_artwork', label: 'Inappropriate artwork' },
+  { id: 'hate_speech', label: 'Hate speech / hate symbols' },
+  { id: 'spam', label: 'Spam / off-topic' },
+  { id: 'copyright', label: 'Copyright violation' },
+  { id: 'other', label: 'Other' },
+];
+
+function PlayerGalleryReportModal({ image, campaign, reporterEmail, onClose }) {
+  const [reason, setReason] = useState('inappropriate_artwork');
+  const [details, setDetails] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [status, setStatus] = useState(null); // 'success' | 'error' | null
+  const [errorMsg, setErrorMsg] = useState('');
+
+  const handleSubmit = async () => {
+    if (!reason || submitting) return;
+    setSubmitting(true);
+    setErrorMsg('');
+    try {
+      const contextUrl = typeof window !== 'undefined' ? window.location.href : null;
+      const res = await fetch('/.netlify/functions/submit-report', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          reportType: 'campaign_gallery',
+          reportedItemId: image?.id ? String(image.id) : '',
+          reportedUserEmail: campaign?.dm_email || null,
+          reporterEmail,
+          reason,
+          details: details.trim() || null,
+          contextUrl,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setErrorMsg(data?.error || `Failed (${res.status})`);
+        setStatus('error');
+        return;
+      }
+      setStatus('success');
+    } catch (err) {
+      console.error('[gallery report] submit threw:', err);
+      setErrorMsg('Network error — please try again.');
+      setStatus('error');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-[70] flex items-center justify-center p-4"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="player-gallery-report-title"
+    >
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="relative z-10 w-full max-w-md rounded-xl border border-domain-panel-border/40 dm-panel-raised"
+      >
+        <div className="flex items-center justify-between px-6 py-4 border-b border-domain-panel-border/30">
+          <h2 id="player-gallery-report-title" className="font-cinzel text-base text-domain-text flex items-center gap-2">
+            <Flag className="w-4 h-4 text-eg4h-gold" />
+            Report this image
+          </h2>
+          <button
+            onClick={onClose}
+            className="text-domain-text-dim/70 hover:text-domain-text transition-colors p-1 cursor-pointer"
+            aria-label="Close"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {status === 'success' ? (
+          <div className="px-6 py-6">
+            <p className="text-sm font-crimson text-domain-text/90 leading-relaxed">
+              Thanks for the report. Our team will review it shortly.
+            </p>
+            <div className="flex justify-end mt-4">
+              <button
+                onClick={onClose}
+                className="px-4 py-2 rounded-lg text-sm font-cinzel text-eg4h-gold border border-eg4h-gold-dark/60 hover:bg-eg4h-gold/10 transition-colors cursor-pointer"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="px-6 py-5 space-y-4">
+            <div>
+              <label className="block text-xs font-cinzel text-domain-text-dim uppercase tracking-wider mb-2">
+                Reason
+              </label>
+              <div className="space-y-1.5">
+                {PLAYER_GALLERY_REPORT_REASONS.map((r) => (
+                  <label key={r.id} className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="player-gallery-report-reason"
+                      value={r.id}
+                      checked={reason === r.id}
+                      onChange={() => setReason(r.id)}
+                      className="accent-eg4h-gold cursor-pointer"
+                    />
+                    <span className="text-sm font-crimson text-domain-text/90">{r.label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label htmlFor="player-gallery-report-details" className="block text-xs font-cinzel text-domain-text-dim uppercase tracking-wider mb-2">
+                Details (optional)
+              </label>
+              <textarea
+                id="player-gallery-report-details"
+                value={details}
+                onChange={(e) => setDetails(e.target.value.slice(0, 1000))}
+                rows={3}
+                placeholder="Anything else our team should know?"
+                className="w-full px-3 py-2 rounded-lg bg-[rgba(15,12,8,0.50)] border border-domain-panel-border/30 text-sm font-crimson text-domain-text placeholder-domain-text-dim/60 focus:border-eg4h-gold-dark focus:outline-none resize-none"
+              />
+              <div className="text-[10px] font-ui text-domain-text-dim/60 text-right mt-1">
+                {details.length}/1000
+              </div>
+            </div>
+
+            {errorMsg && (
+              <p className="text-xs font-crimson text-red-400">{errorMsg}</p>
+            )}
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                onClick={onClose}
+                className="px-4 py-2 rounded-lg text-sm font-cinzel text-domain-text-dim hover:text-domain-text transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSubmit}
+                disabled={submitting}
+                className="px-4 py-2 rounded-lg text-sm font-cinzel transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer text-eg4h-gold border border-eg4h-gold-dark/60 hover:bg-eg4h-gold/10 flex items-center gap-2"
+              >
+                {submitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+                {submitting ? 'Submitting…' : 'Submit report'}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

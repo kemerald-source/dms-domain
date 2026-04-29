@@ -7,7 +7,7 @@ import {
   Scroll, Sparkles, Globe, ChevronUp, ChevronDown, Shield,
   Heart, Eye, X, GripVertical, Pencil, Save, Lock, EyeOff, Dices,
   ChevronRight, BookMarked, MapPin, Clock, Mail, MailOpen, Check, Zap, RotateCcw, Layers, Link2,
-  ImageIcon, Upload, Tag, UserPlus, Copy, LinkIcon, FileText,
+  ImageIcon, Upload, Tag, UserPlus, Copy, LinkIcon, FileText, Flag,
 } from 'lucide-react';
 import { useAuth } from '@/api/AuthContext';
 import { supabase } from '@/lib/supabase';
@@ -266,6 +266,11 @@ export default function SessionView() {
   const [editingCaption, setEditingCaption] = useState(null);
   const [captionText, setCaptionText] = useState('');
   const [linkingNpcImageId, setLinkingNpcImageId] = useState(null);
+  // Gallery upload TOS attestation modal — must be confirmed before file picker opens
+  const [galleryTosOpen, setGalleryTosOpen] = useState(false);
+  const [galleryTosChecked, setGalleryTosChecked] = useState(false);
+  // Gallery report modal — populated with the image record being reported
+  const [reportingImage, setReportingImage] = useState(null);
 
   // Homebrew state
   const [homebrewItems, setHomebrewItems] = useState([]);
@@ -797,6 +802,21 @@ export default function SessionView() {
   };
 
   // ─── Gallery CRUD ───────────────────────────────────────────
+  // Open the TOS modal instead of the file picker directly. Picker only
+  // opens after the user agrees, so the act of uploading is the
+  // attestation that the artwork is theirs / appropriate.
+  const requestGalleryUpload = () => {
+    setGalleryTosChecked(false);
+    setGalleryTosOpen(true);
+  };
+
+  const confirmGalleryTosAndPickFile = () => {
+    if (!galleryTosChecked) return;
+    setGalleryTosOpen(false);
+    // Defer click so the modal close transition doesn't swallow the dialog.
+    setTimeout(() => galleryInputRef.current?.click(), 50);
+  };
+
   const handleGalleryUpload = async (file) => {
     if (!file || !supabase) return;
     if (!isDM && galleryImages.length >= FREE_LIMITS.gallery) {
@@ -2669,7 +2689,7 @@ export default function SessionView() {
       <div>
         <SectionHeader icon={ImageIcon} title={`Gallery${!isDM ? ` (${galleryImages.length}/${FREE_LIMITS.gallery})` : ''}`}>
           <button
-            onClick={() => galleryInputRef.current?.click()}
+            onClick={requestGalleryUpload}
             disabled={uploadingImage}
             className="p-1 text-domain-amber border border-domain-panel-border/50 rounded hover:border-eg4h-gold-dark/60 transition-colors cursor-pointer disabled:opacity-40"
             title="Upload Image"
@@ -2729,6 +2749,13 @@ export default function SessionView() {
                     title="Delete"
                   >
                     <Trash2 className="w-2.5 h-2.5" />
+                  </button>
+                  <button
+                    onClick={() => setReportingImage(img)}
+                    className="w-5 h-5 bg-domain-dark/80 border border-domain-panel-border/50 rounded flex items-center justify-center text-domain-text-dim/60 hover:text-domain-amber cursor-pointer"
+                    title="Report this image"
+                  >
+                    <Flag className="w-2.5 h-2.5" />
                   </button>
                 </div>
                 {/* Caption + tag editor */}
@@ -3644,6 +3671,247 @@ export default function SessionView() {
           reason={upgradeReason}
         />
       )}
+
+      {/* Gallery upload TOS attestation modal */}
+      <AnimatePresence>
+        {galleryTosOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[60] flex items-center justify-center p-4"
+            onClick={() => setGalleryTosOpen(false)}
+          >
+            <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              transition={{ duration: 0.2 }}
+              onClick={(e) => e.stopPropagation()}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="gallery-tos-title"
+              className="relative z-10 w-full max-w-md rounded-xl border border-domain-panel-border/40 dm-panel-raised"
+            >
+              <div className="flex items-center justify-between px-6 py-4 border-b border-domain-panel-border/30">
+                <h2 id="gallery-tos-title" className="font-cinzel text-base text-domain-text flex items-center gap-2">
+                  <Upload className="w-4 h-4 text-eg4h-gold" />
+                  Upload to campaign gallery
+                </h2>
+                <button
+                  onClick={() => setGalleryTosOpen(false)}
+                  className="text-domain-text-dim/70 hover:text-domain-text transition-colors p-1 cursor-pointer"
+                  aria-label="Cancel"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="px-6 py-5">
+                <label className="flex gap-3 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={galleryTosChecked}
+                    onChange={(e) => setGalleryTosChecked(e.target.checked)}
+                    className="mt-1 h-4 w-4 flex-shrink-0 accent-eg4h-gold cursor-pointer"
+                  />
+                  <span className="text-sm font-crimson text-domain-text/90 leading-relaxed">
+                    I confirm this artwork is mine or I have rights to use it,
+                    and that it doesn&apos;t contain inappropriate content
+                    (nudity, gore, hate symbols, or unlicensed copyrighted
+                    material). I understand violations may result in content
+                    removal.
+                  </span>
+                </label>
+              </div>
+              <div className="flex items-center justify-end gap-3 px-6 pb-5">
+                <button
+                  onClick={() => setGalleryTosOpen(false)}
+                  className="px-4 py-2 rounded-lg text-sm font-cinzel text-domain-text-dim hover:text-domain-text transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmGalleryTosAndPickFile}
+                  disabled={!galleryTosChecked}
+                  className="px-4 py-2 rounded-lg text-sm font-cinzel transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer text-eg4h-gold border border-eg4h-gold-dark/60 hover:bg-eg4h-gold/10"
+                >
+                  I agree — choose file
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Gallery report modal */}
+      {reportingImage && (
+        <GalleryReportModal
+          image={reportingImage}
+          campaign={campaign}
+          reporterEmail={user?.email || null}
+          onClose={() => setReportingImage(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─── Gallery report modal (campaign members report inappropriate uploads) ──
+const GALLERY_REPORT_REASONS = [
+  { id: 'inappropriate_artwork', label: 'Inappropriate artwork' },
+  { id: 'hate_speech', label: 'Hate speech / hate symbols' },
+  { id: 'spam', label: 'Spam / off-topic' },
+  { id: 'copyright', label: 'Copyright violation' },
+  { id: 'other', label: 'Other' },
+];
+
+function GalleryReportModal({ image, campaign, reporterEmail, onClose }) {
+  const [reason, setReason] = useState('inappropriate_artwork');
+  const [details, setDetails] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [status, setStatus] = useState(null); // 'success' | 'error' | null
+  const [errorMsg, setErrorMsg] = useState('');
+
+  const handleSubmit = async () => {
+    if (!reason || submitting) return;
+    setSubmitting(true);
+    setErrorMsg('');
+    try {
+      const contextUrl = typeof window !== 'undefined' ? window.location.href : null;
+      const res = await fetch('/.netlify/functions/submit-report', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          reportType: 'campaign_gallery',
+          reportedItemId: image?.id ? String(image.id) : '',
+          reportedUserEmail: campaign?.dm_email || null,
+          reporterEmail,
+          reason,
+          details: details.trim() || null,
+          contextUrl,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setErrorMsg(data?.error || `Failed (${res.status})`);
+        setStatus('error');
+        return;
+      }
+      setStatus('success');
+    } catch (err) {
+      console.error('[gallery report] submit threw:', err);
+      setErrorMsg('Network error — please try again.');
+      setStatus('error');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-[70] flex items-center justify-center p-4"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="gallery-report-title"
+    >
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="relative z-10 w-full max-w-md rounded-xl border border-domain-panel-border/40 dm-panel-raised"
+      >
+        <div className="flex items-center justify-between px-6 py-4 border-b border-domain-panel-border/30">
+          <h2 id="gallery-report-title" className="font-cinzel text-base text-domain-text flex items-center gap-2">
+            <Flag className="w-4 h-4 text-eg4h-gold" />
+            Report this image
+          </h2>
+          <button
+            onClick={onClose}
+            className="text-domain-text-dim/70 hover:text-domain-text transition-colors p-1 cursor-pointer"
+            aria-label="Close"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {status === 'success' ? (
+          <div className="px-6 py-6">
+            <p className="text-sm font-crimson text-domain-text/90 leading-relaxed">
+              Thanks for the report. Our team will review it shortly.
+            </p>
+            <div className="flex justify-end mt-4">
+              <button
+                onClick={onClose}
+                className="px-4 py-2 rounded-lg text-sm font-cinzel text-eg4h-gold border border-eg4h-gold-dark/60 hover:bg-eg4h-gold/10 transition-colors cursor-pointer"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="px-6 py-5 space-y-4">
+            <div>
+              <label className="block text-xs font-cinzel text-domain-text-dim uppercase tracking-wider mb-2">
+                Reason
+              </label>
+              <div className="space-y-1.5">
+                {GALLERY_REPORT_REASONS.map((r) => (
+                  <label key={r.id} className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="gallery-report-reason"
+                      value={r.id}
+                      checked={reason === r.id}
+                      onChange={() => setReason(r.id)}
+                      className="accent-eg4h-gold cursor-pointer"
+                    />
+                    <span className="text-sm font-crimson text-domain-text/90">{r.label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label htmlFor="gallery-report-details" className="block text-xs font-cinzel text-domain-text-dim uppercase tracking-wider mb-2">
+                Details (optional)
+              </label>
+              <textarea
+                id="gallery-report-details"
+                value={details}
+                onChange={(e) => setDetails(e.target.value.slice(0, 1000))}
+                rows={3}
+                placeholder="Anything else our team should know?"
+                className="w-full px-3 py-2 rounded-lg bg-[rgba(15,12,8,0.50)] border border-domain-panel-border/30 text-sm font-crimson text-domain-text placeholder-domain-text-dim/60 focus:border-eg4h-gold-dark focus:outline-none resize-none"
+              />
+              <div className="text-[10px] font-ui text-domain-text-dim/60 text-right mt-1">
+                {details.length}/1000
+              </div>
+            </div>
+
+            {errorMsg && (
+              <p className="text-xs font-crimson text-red-400">{errorMsg}</p>
+            )}
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                onClick={onClose}
+                className="px-4 py-2 rounded-lg text-sm font-cinzel text-domain-text-dim hover:text-domain-text transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSubmit}
+                disabled={submitting}
+                className="px-4 py-2 rounded-lg text-sm font-cinzel transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer text-eg4h-gold border border-eg4h-gold-dark/60 hover:bg-eg4h-gold/10 flex items-center gap-2"
+              >
+                {submitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+                {submitting ? 'Submitting…' : 'Submit report'}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
