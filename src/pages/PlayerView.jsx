@@ -636,7 +636,7 @@ function PlayerGalleryReportModal({ image, campaign, reporterEmail, onClose }) {
         body: JSON.stringify({
           reportType: 'campaign_gallery',
           reportedItemId: image?.id ? String(image.id) : '',
-          reportedUserEmail: campaign?.dm_email || null,
+          campaignId: campaign?.id ? String(campaign.id) : '',
           reporterEmail,
           reason,
           details: details.trim() || null,

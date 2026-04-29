@@ -16,7 +16,8 @@
 //                                 is still recorded; only the email is
 //                                 skipped.
 //   REPORT_NOTIFY_EMAIL         — optional override for the recipient
-//                                 (defaults to support@eg4h.net).
+//                                 (defaults to kemerald@gmail.com — flip to
+//                                 support@ once forwarding is verified).
 //   REPORT_FROM_EMAIL           — optional override for the From: address
 //                                 (defaults to reports@eg4h.net).
 
@@ -35,7 +36,7 @@ const ALLOWED_REPORT_TYPES = new Set([
   'campaign_gallery',
 ]);
 
-const DEFAULT_NOTIFY = 'support@eg4h.net';
+const DEFAULT_NOTIFY = 'kemerald@gmail.com';
 const DEFAULT_FROM = 'reports@eg4h.net';
 
 function jsonResponse(statusCode, payload) {
@@ -146,9 +147,10 @@ export async function handler(event) {
   // item. For DMD gallery reports we pass the campaign_images.id (uuid)
   // through this same field so reports across products share a schema.
   const reportedItemId = (payload.reportedItemId || payload.reportedCharacterId || '').toString().trim();
-  const reportedUserEmail = payload.reportedUserEmail
-    ? String(payload.reportedUserEmail).trim().toLowerCase()
-    : null;
+  const campaignId = (payload.campaignId || '').toString().trim();
+  // Owner email is intentionally NOT taken from the request body. We
+  // resolve it server-side from the campaign row to avoid trusting a
+  // client-supplied address.
   const reporterEmail = payload.reporterEmail
     ? String(payload.reporterEmail).trim().toLowerCase()
     : null;
@@ -162,18 +164,42 @@ export async function handler(event) {
   if (!reportedItemId) {
     return jsonResponse(400, { error: 'Missing reportedItemId' });
   }
+  if (!campaignId) {
+    return jsonResponse(400, { error: 'Missing campaignId' });
+  }
   if (!ALLOWED_REASONS.has(reason)) {
     return jsonResponse(400, { error: 'Invalid reason' });
   }
   const reportType = ALLOWED_REPORT_TYPES.has(reportTypeRaw) ? reportTypeRaw : 'campaign_gallery';
-  // Schema requires reported_user_email NOT NULL — fall back to a sentinel
-  // when the gallery row's owner email is unknown. The DM email is
-  // typically known on the campaign record, so this is rare in practice.
-  const ownerEmailForRow = reportedUserEmail || 'unknown@dmsdomain.eg4h.net';
 
   const supabase = createClient(supabaseUrl, serviceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
+
+  // Resolve the campaign owner's email server-side via the service-role
+  // client. Never trust a client-supplied owner email — the reporter is
+  // an authed campaign member, but we still don't expose the DM's email
+  // through the wire and then echo it back into the report row.
+  let ownerEmailForRow;
+  try {
+    const { data: campaignRow, error: lookupErr } = await supabase
+      .from('campaigns')
+      .select('dm_email')
+      .eq('id', campaignId)
+      .maybeSingle();
+
+    if (lookupErr) {
+      console.error('[submit-report] campaign lookup error:', lookupErr.message);
+      return jsonResponse(500, { error: 'Failed to resolve campaign' });
+    }
+    if (!campaignRow || !campaignRow.dm_email) {
+      return jsonResponse(400, { error: 'campaign_not_found' });
+    }
+    ownerEmailForRow = String(campaignRow.dm_email).trim().toLowerCase();
+  } catch (err) {
+    console.error('[submit-report] campaign lookup threw:', err.message);
+    return jsonResponse(500, { error: 'Failed to resolve campaign' });
+  }
 
   let insertedRow = null;
   try {
