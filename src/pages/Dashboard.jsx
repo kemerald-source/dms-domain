@@ -1,13 +1,15 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
-import { Plus, Calendar, Users, Scroll, LogOut, Loader2, Swords, Pencil, Check, X, Crown, Sparkles } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Plus, Calendar, Users, Scroll, LogOut, Loader2, Swords, Pencil, Check, X, Crown, Sparkles, CreditCard, ChevronDown } from 'lucide-react';
 import { useAuth } from '@/api/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { useTier, FREE_LIMITS } from '@/lib/tier';
 import UpgradeModal from '@/components/UpgradeModal';
 import Footer from '@/components/Footer';
-import { startCheckout, readIntendedPlan, clearIntendedPlan } from '@/lib/checkout';
+import { startCheckout, readIntendedPlan, clearIntendedPlan, openCustomerPortal } from '@/lib/checkout';
+
+const FREE_BANNER_DISMISS_KEY = 'dmd-free-banner-dismissed';
 
 function relativeTime(date) {
   const now = Date.now();
@@ -39,8 +41,50 @@ export default function Dashboard() {
   const [savingDesc, setSavingDesc] = useState(false);
   const [showUpgrade, setShowUpgrade] = useState(false);
   const [upgradeReason, setUpgradeReason] = useState('');
-  const { tier, isDM, isPaid, campaignLimit } = useTier(user?.email);
-  const tierLabel = tier === 'dungeon_master' ? 'Dungeon Master' : tier === 'adventurer' ? 'Adventurer' : 'Free';
+  const [showUserMenu, setShowUserMenu] = useState(false);
+  const [portalLoading, setPortalLoading] = useState(false);
+  const [portalError, setPortalError] = useState(null);
+  const [bannerDismissed, setBannerDismissed] = useState(() => {
+    try { return localStorage.getItem(FREE_BANNER_DISMISS_KEY) === '1'; } catch { return false; }
+  });
+  const userMenuRef = useRef(null);
+  const { tier, isPaid, campaignLimit } = useTier(user?.email);
+  const tierLabel = tier === 'dungeon_master' ? 'Dungeon Master' : tier === 'adventurer' ? 'Adventurer' : tier === 'bundle' ? 'Bundle' : 'Free';
+
+  // Close the user menu when clicking outside.
+  useEffect(() => {
+    if (!showUserMenu) return;
+    function handleClick(e) {
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target)) {
+        setShowUserMenu(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [showUserMenu]);
+
+  const openUpgrade = () => {
+    setUpgradeReason('');
+    setShowUpgrade(true);
+    setShowUserMenu(false);
+  };
+
+  const handleManageSubscription = async () => {
+    if (portalLoading || !user?.email) return;
+    setPortalLoading(true);
+    setPortalError(null);
+    const res = await openCustomerPortal(user.email);
+    if (!res.ok) {
+      setPortalError(res.error);
+      setPortalLoading(false);
+    }
+    // On success the browser is redirecting — leave the spinner.
+  };
+
+  const dismissBanner = () => {
+    setBannerDismissed(true);
+    try { localStorage.setItem(FREE_BANNER_DISMISS_KEY, '1'); } catch { /* ignore */ }
+  };
 
   // Redirect unauthenticated users to the landing page. Don't auto-call
   // login() here — during logout there's a window where setUser(null) has
@@ -227,23 +271,96 @@ export default function Dashboard() {
             <img src="/dmd-logo.png" alt="DMD" className="w-10 h-10" />
             <h1 className="font-cinzel text-xl text-eg4h-gold font-semibold">DM's Domain</h1>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3 sm:gap-4">
             <span className="text-domain-text-dim text-sm font-ui hidden sm:block">
               {user?.name || user?.email}
             </span>
-            <span className={`px-2 py-0.5 text-[10px] font-ui rounded-full ${isPaid ? 'bg-eg4h-gold/20 text-eg4h-gold border border-eg4h-gold-dark/40' : 'bg-gray-800/50 text-gray-400 border border-gray-700/40'}`}>
-              {tierLabel}
-            </span>
-            {user?.avatar && (
-              <img src={user.avatar} alt="" className="w-8 h-8 rounded-full border border-eg4h-gold-dark/50" />
+            {isPaid ? (
+              <span className="px-2 py-0.5 text-[10px] font-ui rounded-full bg-eg4h-gold/20 text-eg4h-gold border border-eg4h-gold-dark/40">
+                {tierLabel}
+              </span>
+            ) : (
+              <button
+                onClick={openUpgrade}
+                title="Upgrade your plan"
+                className="group flex items-center gap-1 px-2 py-0.5 text-[10px] font-ui rounded-full bg-gray-800/50 text-gray-300 border border-gray-700/40 hover:text-eg4h-gold hover:border-eg4h-gold-dark/50 hover:bg-eg4h-gold/10 transition-colors cursor-pointer"
+              >
+                <span>Free</span>
+                <span className="text-eg4h-gold/70 group-hover:text-eg4h-gold">· Upgrade</span>
+              </button>
             )}
-            <button
-              onClick={logout}
-              className="text-domain-text-dim hover:text-eg4h-gold transition-colors cursor-pointer"
-              title="Sign out"
-            >
-              <LogOut className="w-5 h-5" />
-            </button>
+
+            <div className="relative" ref={userMenuRef}>
+              <button
+                onClick={() => setShowUserMenu(s => !s)}
+                className="flex items-center gap-1 text-domain-text-dim hover:text-eg4h-gold transition-colors cursor-pointer"
+                aria-haspopup="menu"
+                aria-expanded={showUserMenu}
+              >
+                {user?.avatar ? (
+                  <img src={user.avatar} alt="" className="w-8 h-8 rounded-full border border-eg4h-gold-dark/50" />
+                ) : (
+                  <span className="w-8 h-8 rounded-full border border-eg4h-gold-dark/50 bg-domain-panel flex items-center justify-center font-cinzel text-sm text-eg4h-gold">
+                    {(user?.name || user?.email || '?').slice(0, 1).toUpperCase()}
+                  </span>
+                )}
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showUserMenu ? 'rotate-180' : ''}`} />
+              </button>
+
+              <AnimatePresence>
+                {showUserMenu && (
+                  <motion.div
+                    role="menu"
+                    initial={{ opacity: 0, y: -4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -4 }}
+                    transition={{ duration: 0.12 }}
+                    className="absolute right-0 mt-2 w-56 dm-panel-raised border border-eg4h-gold-dark/30 rounded-lg shadow-xl py-1.5 z-30"
+                  >
+                    <div className="px-3 py-2 border-b border-domain-panel-border/40">
+                      <p className="text-xs font-ui text-domain-text truncate">{user?.name || user?.email}</p>
+                      <p className="text-[10px] font-ui text-domain-text-dim mt-0.5">
+                        <span className={isPaid ? 'text-eg4h-gold' : 'text-gray-400'}>{tierLabel} plan</span>
+                      </p>
+                    </div>
+                    {isPaid ? (
+                      <button
+                        onClick={handleManageSubscription}
+                        disabled={portalLoading}
+                        role="menuitem"
+                        className="w-full flex items-center gap-2 px-3 py-2 text-xs font-ui text-domain-text hover:text-eg4h-gold hover:bg-eg4h-gold/5 transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-wait"
+                      >
+                        {portalLoading
+                          ? <><Loader2 className="w-3.5 h-3.5 animate-spin" />Opening portal…</>
+                          : <><CreditCard className="w-3.5 h-3.5" />Manage Subscription</>}
+                      </button>
+                    ) : (
+                      <button
+                        onClick={openUpgrade}
+                        role="menuitem"
+                        className="w-full flex items-center gap-2 px-3 py-2 text-xs font-ui text-eg4h-gold hover:bg-eg4h-gold/10 transition-colors cursor-pointer"
+                      >
+                        <Crown className="w-3.5 h-3.5" />
+                        Upgrade
+                      </button>
+                    )}
+                    <button
+                      onClick={() => { setShowUserMenu(false); logout(); }}
+                      role="menuitem"
+                      className="w-full flex items-center gap-2 px-3 py-2 text-xs font-ui text-domain-text-dim hover:text-domain-text hover:bg-domain-panel-border/20 transition-colors cursor-pointer"
+                    >
+                      <LogOut className="w-3.5 h-3.5" />
+                      Sign out
+                    </button>
+                    {portalError && (
+                      <div className="px-3 py-2 border-t border-domain-panel-border/40">
+                        <p className="text-[10px] font-crimson text-red-300">{portalError}</p>
+                      </div>
+                    )}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
           </div>
         </div>
       </header>
@@ -273,19 +390,49 @@ export default function Dashboard() {
           </button>
         </div>
 
-        {/* Upsell prompt for free and Adventurer users */}
-        {!isDM && !loading && campaigns.length > 0 && (
+        {/* Free-tier banner — dismissible, shows even with no campaigns. */}
+        {tier === 'free' && !loading && !bannerDismissed && (
+          <motion.div
+            initial={{ opacity: 0, y: -6 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-6 px-4 py-3 bg-gradient-to-r from-domain-panel via-domain-panel to-eg4h-gold/5 border border-eg4h-gold-dark/30 rounded-lg flex items-center justify-between gap-4"
+          >
+            <div className="flex items-center gap-3 min-w-0">
+              <Sparkles className="w-4 h-4 text-eg4h-gold/80 shrink-0" />
+              <p className="text-sm font-crimson text-domain-text-dim">
+                You're on the <span className="text-domain-text">Free plan</span>. Unlock AI Improv, unlimited NPCs, and homebrew with the <span className="text-eg4h-gold">Dungeon Master</span> tier.
+              </p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={openUpgrade}
+                className="px-4 py-1.5 font-cinzel text-xs font-semibold text-eg4h-black bg-gradient-to-r from-eg4h-gold to-eg4h-gold-light rounded-lg hover:shadow-[0_2px_10px_rgba(255,215,0,0.3)] transition-all cursor-pointer"
+              >
+                See Plans
+              </button>
+              <button
+                onClick={dismissBanner}
+                className="text-domain-text-dim/50 hover:text-domain-text transition-colors cursor-pointer p-1"
+                aria-label="Dismiss"
+                title="Dismiss"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </motion.div>
+        )}
+
+        {/* Adventurer→DM upsell (paid free-style upgrade nudge). */}
+        {tier === 'adventurer' && !loading && campaigns.length > 0 && (
           <div className="mb-6 px-4 py-3 bg-domain-panel border border-eg4h-gold-dark/20 rounded-lg flex items-center justify-between gap-4">
             <div className="flex items-center gap-3 min-w-0">
               <Sparkles className="w-4 h-4 text-eg4h-gold/70 shrink-0" />
               <p className="text-sm font-crimson text-domain-text-dim">
-                {tier === 'adventurer'
-                  ? <>Unlock AI tools, more campaigns, and Homebrew/Gallery with <span className="text-eg4h-gold">Dungeon Master</span>.</>
-                  : <>Unlock AI-powered tools, more campaigns, and more with <span className="text-eg4h-gold">a paid tier</span>.</>}
+                Unlock AI tools, more campaigns, and Homebrew/Gallery with <span className="text-eg4h-gold">Dungeon Master</span>.
               </p>
             </div>
             <button
-              onClick={() => { setUpgradeReason(''); setShowUpgrade(true); }}
+              onClick={openUpgrade}
               className="shrink-0 px-4 py-1.5 font-cinzel text-xs font-semibold text-eg4h-black bg-gradient-to-r from-eg4h-gold to-eg4h-gold-light rounded-lg hover:shadow-[0_2px_10px_rgba(255,215,0,0.3)] transition-all cursor-pointer"
             >
               Upgrade

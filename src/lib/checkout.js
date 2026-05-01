@@ -35,6 +35,34 @@ export async function startCheckout(email, plan) {
   }
 }
 
+/**
+ * Open the Stripe Billing Portal for a paying customer. Redirects the
+ * browser on success. Returns { ok: false, error } when no Stripe customer
+ * exists or the portal session can't be created.
+ */
+export async function openCustomerPortal(email) {
+  if (!email) return { ok: false, error: 'Not signed in' };
+  try {
+    const res = await fetch('/.netlify/functions/customer-portal', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email,
+        returnUrl: `${window.location.origin}/dashboard`,
+      }),
+    });
+    const data = await res.json();
+    if (data.url) {
+      window.location.href = data.url;
+      return { ok: true };
+    }
+    return { ok: false, error: data.error || 'Could not open billing portal.' };
+  } catch (err) {
+    console.error('Portal error:', err);
+    return { ok: false, error: 'Network error — check your connection and try again.' };
+  }
+}
+
 // Let the landing page stash a plan before sending the user through OAuth.
 // Dashboard picks it up on mount once they're authed and launches checkout.
 export function stashIntendedPlan(plan) {
