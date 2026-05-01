@@ -142,8 +142,8 @@ export default function DemoSessionView() {
   const promptSignup = (message) => setSignupPrompt(message);
   const closePrompt = () => setSignupPrompt(null);
 
-  // Scroll to pricing on the landing page.
-  const goToPricing = () => navigate('/#pricing');
+  // Route to the dedicated pricing page.
+  const goToPricing = () => navigate('/pricing');
 
   // Banner "Start Free" still launches the signup widget.
   const handleStartFree = () => login();

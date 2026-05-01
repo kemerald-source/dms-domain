@@ -5,6 +5,7 @@ import SessionView from '@/pages/SessionView';
 import PlayerView from '@/pages/PlayerView';
 import DemoSessionView from '@/pages/DemoSessionView';
 import Changelog from '@/pages/Changelog';
+import Pricing from '@/pages/Pricing';
 
 export default function App() {
   return (
@@ -15,6 +16,7 @@ export default function App() {
       <Route path="/campaign/:id/session" element={<SessionView />} />
       <Route path="/campaign/:id/player" element={<PlayerView />} />
       <Route path="/changelog" element={<Changelog />} />
+      <Route path="/pricing" element={<Pricing />} />
     </Routes>
   );
 }

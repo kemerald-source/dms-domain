@@ -63,10 +63,9 @@ export default function Dashboard() {
     return () => document.removeEventListener('mousedown', handleClick);
   }, [showUserMenu]);
 
-  const openUpgrade = () => {
-    setUpgradeReason('');
-    setShowUpgrade(true);
+  const goToPricing = () => {
     setShowUserMenu(false);
+    navigate('/pricing');
   };
 
   const handleManageSubscription = async () => {
@@ -281,7 +280,7 @@ export default function Dashboard() {
               </span>
             ) : (
               <button
-                onClick={openUpgrade}
+                onClick={goToPricing}
                 title="Upgrade your plan"
                 className="group flex items-center gap-1 px-2 py-0.5 text-[10px] font-ui rounded-full bg-gray-800/50 text-gray-300 border border-gray-700/40 hover:text-eg4h-gold hover:border-eg4h-gold-dark/50 hover:bg-eg4h-gold/10 transition-colors cursor-pointer"
               >
@@ -336,7 +335,7 @@ export default function Dashboard() {
                       </button>
                     ) : (
                       <button
-                        onClick={openUpgrade}
+                        onClick={goToPricing}
                         role="menuitem"
                         className="w-full flex items-center gap-2 px-3 py-2 text-xs font-ui text-eg4h-gold hover:bg-eg4h-gold/10 transition-colors cursor-pointer"
                       >
@@ -405,7 +404,7 @@ export default function Dashboard() {
             </div>
             <div className="flex items-center gap-2 shrink-0">
               <button
-                onClick={openUpgrade}
+                onClick={goToPricing}
                 className="px-4 py-1.5 font-cinzel text-xs font-semibold text-eg4h-black bg-gradient-to-r from-eg4h-gold to-eg4h-gold-light rounded-lg hover:shadow-[0_2px_10px_rgba(255,215,0,0.3)] transition-all cursor-pointer"
               >
                 See Plans
@@ -432,7 +431,7 @@ export default function Dashboard() {
               </p>
             </div>
             <button
-              onClick={openUpgrade}
+              onClick={goToPricing}
               className="shrink-0 px-4 py-1.5 font-cinzel text-xs font-semibold text-eg4h-black bg-gradient-to-r from-eg4h-gold to-eg4h-gold-light rounded-lg hover:shadow-[0_2px_10px_rgba(255,215,0,0.3)] transition-all cursor-pointer"
             >
               Upgrade

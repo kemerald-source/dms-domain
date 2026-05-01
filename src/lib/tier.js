@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 
 // ─── Admin tier override ─────────────────────────────────────
-const ADMIN_EMAILS = ['kcolburn@eg4h.net', 'centersfocus@gmail.com'];
+const ADMIN_EMAILS = ['kcolburn@eg4h.net', 'centersfocus@gmail.com', 'redeyedcyborg@gmail.com'];
 
 // ─── Free tier limits ────────────────────────────────────────
 // Adventurer and Dungeon Master both get unlimited for in-session items

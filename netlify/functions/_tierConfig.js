@@ -113,7 +113,7 @@ export function currentMonthKey(date = new Date()) {
 }
 
 // ─── Admin overrides ───────────────────────────────────────────
-export const ADMIN_EMAILS = ['kcolburn@eg4h.net', 'centersfocus@gmail.com'];
+export const ADMIN_EMAILS = ['kcolburn@eg4h.net', 'centersfocus@gmail.com', 'redeyedcyborg@gmail.com'];
 
 export function isAdmin(email) {
   return !!email && ADMIN_EMAILS.includes(email.toLowerCase());
