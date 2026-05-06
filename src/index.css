@@ -69,10 +69,13 @@ body {
     rgba(15, 12, 8, 0.65);
 }
 
-/* Content sits above the background layers */
-.dm-study-bg > * {
-  position: relative;
-  z-index: 1;
+/* Content sits above the background layers. In a layer so Tailwind
+   utilities (z-10, z-20, …) can override per-element. */
+@layer base {
+  .dm-study-bg > * {
+    position: relative;
+    z-index: 1;
+  }
 }
 
 /* Parchment-style panels — translucent over study image */
