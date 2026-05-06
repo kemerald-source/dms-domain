@@ -314,6 +314,7 @@ export default function Dashboard() {
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -4 }}
                     transition={{ duration: 0.12 }}
+                    style={{ background: 'rgba(22, 18, 12, 0.85)' }}
                     className="absolute right-0 mt-2 w-56 dm-panel-raised border border-eg4h-gold-dark/30 rounded-lg shadow-xl py-1.5 z-30"
                   >
                     <div className="px-3 py-2 border-b border-domain-panel-border/40">
