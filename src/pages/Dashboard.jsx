@@ -65,7 +65,7 @@ export default function Dashboard() {
 
   const goToPricing = () => {
     setShowUserMenu(false);
-    navigate('/pricing');
+    navigate('/#pricing');
   };
 
   const handleManageSubscription = async () => {

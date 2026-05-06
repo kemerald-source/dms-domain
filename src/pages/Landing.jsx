@@ -104,17 +104,25 @@ export default function Landing() {
   // pre-emptively wipe the hash, we race the widget and kill auth on
   // every OAuth return.
 
-  // After OAuth, send authed users straight to the dashboard.
+  // After OAuth, send authed users straight to the dashboard — but allow
+  // them through if they've deep-linked to an in-page anchor (#pricing,
+  // #faq, …) so authed visitors clicking "See Plans" can still see the
+  // pricing section instead of being bounced.
   useEffect(() => {
     if (!loading && isAuthenticated) {
+      const hash = window.location.hash;
+      const isContentAnchor = hash &&
+        !/^#(?:access_token|id_token|refresh_token|error|error_description)=/.test(hash);
+      if (isContentAnchor) return;
       navigate('/dashboard', { replace: true });
     }
   }, [loading, isAuthenticated, navigate]);
 
   // Handle regular anchor hashes (e.g. /#pricing from the demo CTA).
-  // SPA navigation doesn't fire the browser's native scroll-to-id. We also
-  // re-scroll after `window.load` because images above the anchor will shift
-  // layout as they decode, and an early scroll lands halfway up the page.
+  // SPA navigation (e.g. /demo → /#pricing) doesn't re-fire window.load,
+  // and images above the anchor change page height as they decode, so we
+  // re-align on each image load plus a few timer fallbacks. Auto-realign
+  // stops the moment the user starts scrolling manually.
   useEffect(() => {
     const hash = window.location.hash;
     if (!hash || /^#(?:access_token|id_token|refresh_token|error|error_description)=/.test(hash)) return;
@@ -125,18 +133,26 @@ export default function Landing() {
       if (el) el.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto', block: 'start' });
     };
 
+    let userScrolled = false;
+    const markUserScroll = () => { userScrolled = true; };
+    window.addEventListener('wheel', markUserScroll, { passive: true, once: true });
+    window.addEventListener('touchmove', markUserScroll, { passive: true, once: true });
+
     // Initial scroll once React has painted.
     const raf = requestAnimationFrame(() => requestAnimationFrame(() => scrollToAnchor(true)));
 
-    // Re-align once images/fonts finish loading.
-    const onLoad = () => scrollToAnchor(false);
-    if (document.readyState !== 'complete') {
-      window.addEventListener('load', onLoad, { once: true });
-    }
+    const realign = () => { if (!userScrolled) scrollToAnchor(false); };
+    const pendingImgs = Array.from(document.images).filter(img => !img.complete);
+    pendingImgs.forEach(img => img.addEventListener('load', realign, { once: true }));
+
+    const timers = [300, 800, 1500].map(ms => setTimeout(realign, ms));
 
     return () => {
       cancelAnimationFrame(raf);
-      window.removeEventListener('load', onLoad);
+      timers.forEach(clearTimeout);
+      pendingImgs.forEach(img => img.removeEventListener('load', realign));
+      window.removeEventListener('wheel', markUserScroll);
+      window.removeEventListener('touchmove', markUserScroll);
     };
   }, []);
 
