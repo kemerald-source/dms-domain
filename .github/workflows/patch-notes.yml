@@ -26,4 +26,7 @@ jobs:
           EMBED_COLOR: ${{ vars.EMBED_COLOR }}
           REPO_URL: ${{ github.server_url }}/${{ github.repository }}
           COMMIT_SHA: ${{ github.sha }}
-        run: python .github/scripts/post_changelog.py
+        run: |
+          echo "Webhook URL length: ${#DISCORD_WEBHOOK_URL}"
+          echo "Webhook URL prefix: ${DISCORD_WEBHOOK_URL:0:35}"
+          python .github/scripts/post_changelog.py
