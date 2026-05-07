@@ -1,0 +1,18 @@
+# Changelog
+
+All notable changes to DM's Domain will be documented here.
+
+## 2026-05-06 — Patch notes automation live
+- Set up automated patch notes posting to the #dmd-patch-notes Discord channel.
+- New CHANGELOG.md entries auto-post on push to main.
+
+## 2026-05-06 — Bot wiring test
+- Set up automated patch notes posting to Discord.
+- This entry is the first test of the new system.
+
+## 2026-05-06 — Part 2
+- Testing new entry on test branch.
+- This entry is only a test. if it was an actual changelog, something would of changed.
+- Round 2!
+- Round 3!
+- Round 4!

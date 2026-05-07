@@ -1,0 +1,29 @@
+name: Post Patch Notes to Discord
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'CHANGELOG.md'
+  workflow_dispatch:
+
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Post to Discord
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          REPO_DISPLAY_NAME: ${{ vars.REPO_DISPLAY_NAME }}
+          EMBED_COLOR: ${{ vars.EMBED_COLOR }}
+          REPO_URL: ${{ github.server_url }}/${{ github.repository }}
+          COMMIT_SHA: ${{ github.sha }}
+        run: python .github/scripts/post_changelog.py
