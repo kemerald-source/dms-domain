@@ -2,6 +2,7 @@
 - Testing new entry on test branch.
 - This entry is only a test. if it was an actual changelog, something would of changed.
 - Round 2!
+- Round 3!
 
 # Changelog
 
