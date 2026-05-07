@@ -73,7 +73,6 @@ def main():
         embed['url'] = f'{repo_url}/blob/{commit_sha}/CHANGELOG.md'
 
     payload = {'embeds': [embed]}
-    print(f'Payload: {json.dumps(payload, indent=2)}')
     req = urllib.request.Request(
         webhook,
         data=json.dumps(payload).encode('utf-8'),
