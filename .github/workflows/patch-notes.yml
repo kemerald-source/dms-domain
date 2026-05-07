@@ -2,7 +2,7 @@ name: Post Patch Notes to Discord
 
 on:
   push:
-    branches: [main, feat/discord-patch-notes-bot]
+    branches: [main]
     paths:
       - 'CHANGELOG.md'
   workflow_dispatch:
@@ -26,7 +26,4 @@ jobs:
           EMBED_COLOR: ${{ vars.EMBED_COLOR }}
           REPO_URL: ${{ github.server_url }}/${{ github.repository }}
           COMMIT_SHA: ${{ github.sha }}
-        run: |
-          echo "Webhook URL length: ${#DISCORD_WEBHOOK_URL}"
-          echo "Webhook URL prefix: ${DISCORD_WEBHOOK_URL:0:35}"
-          python .github/scripts/post_changelog.py
+        run: python .github/scripts/post_changelog.py
