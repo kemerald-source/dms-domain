@@ -77,7 +77,10 @@ def main():
     req = urllib.request.Request(
         webhook,
         data=json.dumps(payload).encode('utf-8'),
-        headers={'Content-Type': 'application/json'},
+        headers={
+            'Content-Type': 'application/json',
+            'User-Agent': 'DiscordBot (https://github.com/kemerald-source/dms-domain, 1.0)',
+        },
     )
     try:
         with urllib.request.urlopen(req) as resp:
