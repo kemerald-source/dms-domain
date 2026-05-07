@@ -73,13 +73,19 @@ def main():
         embed['url'] = f'{repo_url}/blob/{commit_sha}/CHANGELOG.md'
 
     payload = {'embeds': [embed]}
+    print(f'Payload: {json.dumps(payload, indent=2)}')
     req = urllib.request.Request(
         webhook,
         data=json.dumps(payload).encode('utf-8'),
         headers={'Content-Type': 'application/json'},
     )
-    with urllib.request.urlopen(req) as resp:
-        print(f'Discord response: {resp.status}')
+    try:
+        with urllib.request.urlopen(req) as resp:
+            print(f'Discord response: {resp.status}')
+    except urllib.error.HTTPError as e:
+        print(f'HTTP {e.code}: {e.reason}')
+        print(f'Response body: {e.read().decode("utf-8", errors="replace")}')
+        raise
 
 
 if __name__ == '__main__':
