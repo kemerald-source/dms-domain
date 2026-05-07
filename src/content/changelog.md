@@ -1,5 +1,10 @@
 # Changelog
 
+## May 2026
+
+**May 7**
+- Added: a global AI features toggle in account settings. AI-skeptical players welcome — turn it all off and use DMD/CE without ever seeing an AI prompt.
+
 ## April 2026
 
 **April 29**

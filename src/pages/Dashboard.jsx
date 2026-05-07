@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Calendar, Users, Scroll, LogOut, Loader2, Swords, Pencil, Check, X, Crown, Sparkles, CreditCard, ChevronDown } from 'lucide-react';
 import { useAuth } from '@/api/AuthContext';
+import { useAiPref } from '@/api/AiPrefContext';
 import { supabase } from '@/lib/supabase';
 import { useTier, FREE_LIMITS } from '@/lib/tier';
 import UpgradeModal from '@/components/UpgradeModal';
@@ -50,6 +51,7 @@ export default function Dashboard() {
   const userMenuRef = useRef(null);
   const { tier, isPaid, campaignLimit } = useTier(user?.email);
   const tierLabel = tier === 'dungeon_master' ? 'Dungeon Master' : tier === 'adventurer' ? 'Adventurer' : tier === 'bundle' ? 'Bundle' : 'Free';
+  const { aiEnabled, setAiEnabled } = useAiPref();
 
   // Close the user menu when clicking outside.
   useEffect(() => {
@@ -321,6 +323,28 @@ export default function Dashboard() {
                       <p className="text-xs font-ui text-domain-text truncate">{user?.name || user?.email}</p>
                       <p className="text-[10px] font-ui text-domain-text-dim mt-0.5">
                         <span className={isPaid ? 'text-eg4h-gold' : 'text-gray-400'}>{tierLabel} plan</span>
+                      </p>
+                    </div>
+                    <div className="px-3 py-2 border-b border-domain-panel-border/40">
+                      <label className="flex items-center justify-between gap-2 cursor-pointer">
+                        <span className="flex items-center gap-2 text-xs font-ui text-domain-text">
+                          <Sparkles className="w-3.5 h-3.5 text-eg4h-gold/80" />
+                          AI Features
+                        </span>
+                        <button
+                          type="button"
+                          role="switch"
+                          aria-checked={aiEnabled}
+                          onClick={() => setAiEnabled(!aiEnabled)}
+                          className={`relative inline-flex h-4 w-7 flex-shrink-0 items-center rounded-full transition-colors ${aiEnabled ? 'bg-eg4h-gold' : 'bg-gray-700'}`}
+                        >
+                          <span
+                            className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${aiEnabled ? 'translate-x-3.5' : 'translate-x-0.5'}`}
+                          />
+                        </button>
+                      </label>
+                      <p className="text-[10px] font-ui text-domain-text-dim mt-1.5 leading-snug">
+                        When off, all AI generation, suggestions, and assists are hidden site-wide. You can re-enable anytime.
                       </p>
                     </div>
                     {isPaid ? (

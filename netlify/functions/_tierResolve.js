@@ -13,6 +13,7 @@ import {
   limitsForTier,
   currentMonthKey,
 } from './_tierConfig.js';
+import { fetchAiEnabled } from './_aiPref.js';
 
 // AI feature → corresponding limit field + usage column + response key.
 const FEATURE_MAP = {
@@ -140,6 +141,15 @@ export async function gateAi({ email, feature, corsHeaders = {} }) {
   if (!email) return { blocked: respond(400, { error: 'userEmail is required' }, corsHeaders) };
   const map = FEATURE_MAP[feature];
   if (!map) return { blocked: respond(500, { error: `Unknown AI feature: ${feature}` }, corsHeaders) };
+
+  // Global per-user AI off-switch. Returns 200 + { disabled: true } so the
+  // frontend treats it as a successful no-op, not an error. Quota is not
+  // touched. The frontend should already be hiding AI UI when this is off;
+  // this gate is the defensive double-check against direct API calls.
+  const aiEnabled = await fetchAiEnabled(email);
+  if (!aiEnabled) {
+    return { blocked: respond(200, { disabled: true }, corsHeaders) };
+  }
 
   const enforced = process.env.AI_QUOTA_ENFORCED !== 'false';
   const { tier } = await resolveTier(email);

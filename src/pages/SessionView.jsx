@@ -10,6 +10,7 @@ import {
   ImageIcon, Upload, Tag, UserPlus, Copy, LinkIcon, FileText, Flag,
 } from 'lucide-react';
 import { useAuth } from '@/api/AuthContext';
+import { useAiPref } from '@/api/AiPrefContext';
 import { supabase } from '@/lib/supabase';
 import { useTier, FREE_LIMITS } from '@/lib/tier';
 import UpgradeModal from '@/components/UpgradeModal';
@@ -206,6 +207,7 @@ export default function SessionView() {
   const { id: campaignId } = useParams();
   const navigate = useNavigate();
   const { user, isAuthenticated, loading: authLoading } = useAuth();
+  const { aiEnabled } = useAiPref();
 
   const [campaign, setCampaign] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -301,6 +303,17 @@ export default function SessionView() {
   const [embellishMode, setEmbellishMode] = useState(false);
   const [embellishing, setEmbellishing] = useState(false);
   const [aiEmbellishedFields, setAiEmbellishedFields] = useState([]);
+
+  // When the user disables AI globally, force any active AI sub-modes off
+  // so the "Generate" button on Quick NPC won't silently call the AI path
+  // while the toggle UI is hidden.
+  useEffect(() => {
+    if (!aiEnabled) {
+      setNpcAiMode(false);
+      setEmbellishMode(false);
+      setAiEmbellishedFields([]);
+    }
+  }, [aiEnabled]);
 
   // Right panel state
   const [partyMembers, setPartyMembers] = useState([]);
@@ -1836,7 +1849,7 @@ export default function SessionView() {
             )}
 
             {/* Generate Summary button */}
-            {activeNote.raw_notes && (
+            {aiEnabled && activeNote.raw_notes && (
               <div className="mt-3">
                 <button
                   onClick={async () => {
@@ -1931,22 +1944,24 @@ export default function SessionView() {
               <Card className="mb-3 !bg-domain-panel-raised">
                 <div className="flex items-center justify-between mb-2">
                   <p className="text-xs font-cinzel text-domain-text">Quick NPC Generator</p>
-                  <button
-                    onClick={() => {
-                      if (!npcAiMode && !requireAi(
-                        'npc_gen',
-                        "You've used your free AI NPC generation for this month. Upgrade for unlimited.",
-                        'AI-enhanced NPC generation is a Dungeon Master tier feature.'
-                      )) return;
-                      setNpcAiMode(v => !v);
-                    }}
-                    className="flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <span className="text-[10px] font-ui text-domain-text-dim">AI Enhanced</span>
-                    <div className={`w-7 h-4 rounded-full relative transition-colors ${npcAiMode ? 'bg-eg4h-gold/60' : 'bg-domain-panel-border/40'}`}>
-                      <div className={`absolute top-0.5 w-3 h-3 rounded-full transition-all ${npcAiMode ? 'left-3.5 bg-eg4h-gold' : 'left-0.5 bg-domain-text-dim/60'}`} />
-                    </div>
-                  </button>
+                  {aiEnabled && (
+                    <button
+                      onClick={() => {
+                        if (!npcAiMode && !requireAi(
+                          'npc_gen',
+                          "You've used your free AI NPC generation for this month. Upgrade for unlimited.",
+                          'AI-enhanced NPC generation is a Dungeon Master tier feature.'
+                        )) return;
+                        setNpcAiMode(v => !v);
+                      }}
+                      className="flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <span className="text-[10px] font-ui text-domain-text-dim">AI Enhanced</span>
+                      <div className={`w-7 h-4 rounded-full relative transition-colors ${npcAiMode ? 'bg-eg4h-gold/60' : 'bg-domain-panel-border/40'}`}>
+                        <div className={`absolute top-0.5 w-3 h-3 rounded-full transition-all ${npcAiMode ? 'left-3.5 bg-eg4h-gold' : 'left-0.5 bg-domain-text-dim/60'}`} />
+                      </div>
+                    </button>
+                  )}
                 </div>
                 <input
                   type="text"
@@ -1993,23 +2008,25 @@ export default function SessionView() {
               <Card className="mb-3 !bg-domain-panel-raised">
                 <div className="flex items-center justify-between mb-2">
                   <p className="text-xs font-cinzel text-domain-text">Edit NPC</p>
-                  <button
-                    onClick={() => {
-                      if (!embellishMode && !requireAi(
-                        'npc_gen',
-                        "You've used your free AI NPC generation for this month. Upgrade for unlimited.",
-                        'AI Embellish is a Dungeon Master tier feature.'
-                      )) return;
-                      setEmbellishMode(v => !v);
-                      if (embellishMode) setAiEmbellishedFields([]);
-                    }}
-                    className="flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <span className="text-[10px] font-ui text-domain-text-dim">AI Embellish</span>
-                    <div className={`w-7 h-4 rounded-full relative transition-colors ${embellishMode ? 'bg-purple-600/60' : 'bg-domain-panel-border/40'}`}>
-                      <div className={`absolute top-0.5 w-3 h-3 rounded-full transition-all ${embellishMode ? 'left-3.5 bg-purple-400' : 'left-0.5 bg-domain-text-dim/60'}`} />
-                    </div>
-                  </button>
+                  {aiEnabled && (
+                    <button
+                      onClick={() => {
+                        if (!embellishMode && !requireAi(
+                          'npc_gen',
+                          "You've used your free AI NPC generation for this month. Upgrade for unlimited.",
+                          'AI Embellish is a Dungeon Master tier feature.'
+                        )) return;
+                        setEmbellishMode(v => !v);
+                        if (embellishMode) setAiEmbellishedFields([]);
+                      }}
+                      className="flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <span className="text-[10px] font-ui text-domain-text-dim">AI Embellish</span>
+                      <div className={`w-7 h-4 rounded-full relative transition-colors ${embellishMode ? 'bg-purple-600/60' : 'bg-domain-panel-border/40'}`}>
+                        <div className={`absolute top-0.5 w-3 h-3 rounded-full transition-all ${embellishMode ? 'left-3.5 bg-purple-400' : 'left-0.5 bg-domain-text-dim/60'}`} />
+                      </div>
+                    </button>
+                  )}
                 </div>
                 {embellishMode && quotaEnforced && tier === 'free' && limits?.aiNpcGenQuota > 0 && (
                   <p className="text-[10px] font-ui text-domain-text-dim/60 mb-2 -mt-1">
@@ -2294,6 +2311,7 @@ export default function SessionView() {
       </div>
 
       {/* AI Improv Assist */}
+      {aiEnabled && (
       <div className="shrink-0">
         <SectionHeader icon={Sparkles} title="AI Improv Assist">
           {quotaEnforced && tier === 'free' && limits?.aiImprovQuota > 0 && (
@@ -2491,6 +2509,7 @@ export default function SessionView() {
           )}
         </AnimatePresence>
       </div>
+      )}
 
       {/* World Lore */}
       <div className="shrink-0">
