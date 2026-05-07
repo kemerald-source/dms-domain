@@ -1,6 +1,7 @@
 ## 2026-05-06 — Part 2
 - Testing new entry on test branch.
 - This entry is only a test. if it was an actual changelog, something would of changed.
+- Round 2!
 
 # Changelog
 
