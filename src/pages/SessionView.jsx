@@ -3574,7 +3574,7 @@ export default function SessionView() {
             )}
           </div>
           <span className={`shrink-0 px-2 py-0.5 text-[10px] font-ui rounded-full ${isPaid ? 'bg-eg4h-gold/20 text-eg4h-gold border border-eg4h-gold-dark/40' : 'bg-gray-800/50 text-gray-400 border border-gray-700/40'}`}>
-            {tier === 'dungeon_master' ? 'DM' : tier === 'adventurer' ? 'Adv' : 'Free'}
+            {tier === 'bundle' ? 'Bundle' : tier === 'dungeon_master' ? 'DM' : tier === 'adventurer' ? 'Adv' : 'Free'}
           </span>
         </div>
       </header>
