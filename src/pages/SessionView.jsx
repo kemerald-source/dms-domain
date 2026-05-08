@@ -63,85 +63,6 @@ const URGENCY_COLORS = {
   critical: 'border-red-800/50',
 };
 
-// ─── Quick NPC generator data ───────────────────────────────
-const NPC_FIRST = ['Aldric','Brenna','Cedric','Delara','Eamon','Fiona','Gareth','Helena','Idris','Jasira','Kael','Lyria','Magnus','Nara','Orin','Petra','Quinn','Rowan','Sable','Theron','Ursa','Vesper','Wren','Xara','Yoren','Zella','Dorian','Elara','Fenwick','Greta','Haldan','Isolde','Jorik','Kessa','Lothar','Miriel','Niles','Olwen','Phelan','Rhiannon','Stellan','Tova','Ulfric','Vara','Wynne'];
-const NPC_LAST = ['Ashford','Blackthorn','Copperfield','Duskwalker','Emberstone','Foxglove','Greymane','Holloway','Ironforge','Jasperwind','Knightley','Larkwood','Moonvale','Nighthollow','Oakhart','Pinecrest','Quillbrook','Ravenscar','Stormhaven','Thornwall','Underhill','Vexley','Whitmore','Yarrow','Zephyrs'];
-const NPC_ROLES = { shopkeeper: 'Shopkeeper', merchant: 'Merchant', guard: 'Town Guard', noble: 'Noble', bartender: 'Bartender', innkeeper: 'Innkeeper', blacksmith: 'Blacksmith', priest: 'Priest', beggar: 'Beggar', farmer: 'Farmer', sailor: 'Sailor', scholar: 'Scholar', thief: 'Thief', bard: 'Traveling Bard', witch: 'Hedge Witch', hunter: 'Hunter', courier: 'Courier', healer: 'Healer', mayor: 'Town Elder', captain: 'Guard Captain', wizard: 'Wizard', alchemist: 'Alchemist', spy: 'Spy', assassin: 'Assassin', monk: 'Monk', paladin: 'Paladin', ranger: 'Ranger', druid: 'Druid', cleric: 'Cleric', warlock: 'Warlock', sorcerer: 'Sorcerer', knight: 'Knight', squire: 'Squire', herbalist: 'Herbalist', librarian: 'Librarian', smuggler: 'Smuggler', pirate: 'Pirate', cook: 'Cook', miner: 'Miner', fisher: 'Fisher', hermit: 'Hermit' };
-const NPC_PERSONALITIES = ['Warm and welcoming, always offering tea','Suspicious of strangers, speaks in clipped sentences','Overly cheerful, deflects serious topics with jokes','Melancholic and wistful, often lost in thought','Brash and confident, talks over others','Quiet and observant, notices everything','Nervous and fidgety, avoids eye contact','Sarcastic and dry, hides kindness behind wit','Fiercely loyal, protective of their community','Greedy and calculating, always angling for profit','Devoutly religious, quotes scripture constantly','Haunted by past mistakes, seeks redemption','Ambitious and ruthless, always scheming','Kind but naive, trusts too easily','Gruff exterior hiding a heart of gold'];
-const NPC_QUIRKS = ['Constantly polishes the same spot on the counter','Collects unusual buttons and shows them to anyone who will look','Hums an eerie tune under their breath','Always carries a worn letter they never open','Speaks to an invisible companion','Has a distinctive laugh that fills the room','Taps their fingers in a rhythmic pattern when thinking','Squints at people as if trying to remember them','Offers unsolicited advice about everything','Always eating something, crumbs everywhere','Refers to themselves in the third person','Ends every sentence with a proverb or saying','Has a pet rat/toad/raven on their shoulder','Sketches people they meet in a small journal','Limps slightly but refuses to explain why'];
-const NPC_MOTIVATIONS = ['Protecting a dark family secret','Paying off a massive debt to a dangerous creditor','Searching for a missing loved one','Trying to leave town before something bad happens','Building enough wealth to retire somewhere warm','Atoning for a crime no one knows about','Gathering information for a mysterious patron','Keeping the peace at any cost','Hoarding supplies for an anticipated disaster','Winning the affection of someone out of their league','Hiding from someone or something from their past','Seeking revenge for a wrong done long ago','Collecting rare ingredients for a special purpose','Proving themselves worthy to their family','Uncovering the truth behind local disappearances'];
-const NPC_VOICES = ['Low and gravelly, pauses often','High-pitched and rapid, barely stops for breath','Thick regional accent, uses local slang','Formal and precise, never uses contractions','Whispers conspiratorially, even about mundane things','Booming and theatrical, gestures wildly','Soft and melodic, almost singing','Stutters when nervous, which is often','Speaks very slowly and deliberately','Raspy, as if recovering from illness','Clipped military cadence','Warm and motherly/fatherly tone','Monotone and flat, hard to read','Excitable, pitch rises when interested','Speaks through clenched teeth, barely moving lips'];
-
-function pickRandom(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
-
-function detectRole(desc) {
-  const lower = desc.toLowerCase();
-  for (const [keyword, role] of Object.entries(NPC_ROLES)) {
-    if (lower.includes(keyword)) return role;
-  }
-  return null;
-}
-
-function parseNpcInput(input) {
-  if (!input || !input.trim()) return {};
-  const text = input.trim();
-  const result = {};
-
-  // Try to extract "Name, Role" or "Name - Role" pattern at the start
-  const nameRoleMatch = text.match(/^([A-Z][a-zA-Z'']+(?:\s+[A-Z][a-zA-Z'']+)*)\s*[,\-–—]\s*(.+)/);
-  if (nameRoleMatch) {
-    result.name = nameRoleMatch[1].trim();
-    const rest = nameRoleMatch[2].trim();
-    // Check if the rest starts with a role keyword
-    const detectedRole = detectRole(rest);
-    if (detectedRole) {
-      result.role = detectedRole;
-      // Anything after the role keyword might be more description
-      const roleIdx = rest.toLowerCase().indexOf(Object.keys(NPC_ROLES).find(k => rest.toLowerCase().includes(k)) || '');
-      const roleWord = Object.keys(NPC_ROLES).find(k => rest.toLowerCase().includes(k)) || '';
-      const afterRole = rest.slice(roleIdx + roleWord.length).replace(/^[\s,\-–—]+/, '').trim();
-      if (afterRole) result.personality = afterRole;
-    } else {
-      // The rest is a description, not a known role — use it as role text
-      result.role = rest.split(/[,.]/)[0].trim();
-      const afterFirstClause = rest.slice(result.role.length).replace(/^[\s,]+/, '').trim();
-      if (afterFirstClause) result.personality = afterFirstClause;
-    }
-    return result;
-  }
-
-  // Try to extract just a capitalized name at the start (2+ capitalized words)
-  const nameOnlyMatch = text.match(/^([A-Z][a-zA-Z'']+(?:\s+[A-Z][a-zA-Z'']+)+)\s+(.+)/);
-  if (nameOnlyMatch) {
-    const possibleName = nameOnlyMatch[1];
-    const rest = nameOnlyMatch[2];
-    // Only treat as name if it's 2-3 words and followed by lowercase description
-    if (possibleName.split(/\s+/).length <= 3 && /^[a-z]/.test(rest)) {
-      result.name = possibleName;
-      result.role = detectRole(rest);
-      // Extract goal: pattern
-      const goalMatch = rest.match(/goal:\s*(.+?)(?:\.|$)/i);
-      if (goalMatch) result.motivation = goalMatch[1].trim();
-      // Whatever remains is personality/description
-      const descPart = rest.replace(/goal:\s*.+?(?:\.|$)/i, '').trim();
-      if (descPart && !result.role) result.role = descPart.split(/[,.]/)[0].trim();
-      else if (descPart && descPart !== result.role) result.personality = descPart;
-      return result;
-    }
-  }
-
-  // No name detected — treat the whole input as a description
-  result.role = detectRole(text);
-  // Extract goal: pattern
-  const goalMatch = text.match(/goal:\s*(.+?)(?:\.|$)/i);
-  if (goalMatch) result.motivation = goalMatch[1].trim();
-  // Use the input (minus goal) as personality
-  const descPart = text.replace(/goal:\s*.+?(?:\.|$)/i, '').trim();
-  if (descPart) result.personality = descPart;
-
-  return result;
-}
-
 // ─── Extract stats from CE character_data ───────────────────
 function parseCharStats(cd) {
   if (!cd) return { name: 'Unknown', charClass: '', level: '', ac: '—', hp: '—', maxHp: '', pp: null };
@@ -231,7 +152,7 @@ export default function SessionView() {
   // NPC edit form state
   const [showNpcForm, setShowNpcForm] = useState(false);
   const [editingNpc, setEditingNpc] = useState(null);
-  const [npcForm, setNpcForm] = useState({ name: '', role: '', personality: '', quirks: '', voice_notes: '', motivation: '', location: '' });
+  const [npcForm, setNpcForm] = useState({ name: '', role: '', personality: '', quirks: '', voice_notes: '', motivation: '', location: '', backstory: '' });
   const [savingNpc, setSavingNpc] = useState(false);
 
   // Center panel state
@@ -299,6 +220,10 @@ export default function SessionView() {
   const [npcPrompt, setNpcPrompt] = useState('');
   const [generatingNpc, setGeneratingNpc] = useState(false);
   const [npcAiMode, setNpcAiMode] = useState(null); // null = unset, set on form open
+  // Manual fields for the AI-off path. Saved exactly as typed — no random
+  // pool fallback, no parser inference. Empty fields stay empty.
+  const QUICK_NPC_BLANK = { name: '', role: '', location: '', personality: '', quirks: '', voice_notes: '', motivation: '', backstory: '' };
+  const [quickNpcManual, setQuickNpcManual] = useState(QUICK_NPC_BLANK);
   // NPC embellish state
   const [embellishMode, setEmbellishMode] = useState(false);
   const [embellishing, setEmbellishing] = useState(false);
@@ -1143,6 +1068,7 @@ export default function SessionView() {
       voice_notes: npc.voice_notes || '',
       motivation: npc.motivation || '',
       location: npc.location || '',
+      backstory: npc.backstory || '',
     });
     setAiEmbellishedFields([]);
     setShowNpcForm(true);
@@ -1207,6 +1133,7 @@ export default function SessionView() {
         voice_notes: npcForm.voice_notes.trim() || null,
         motivation: npcForm.motivation.trim() || null,
         location: npcForm.location.trim() || null,
+        backstory: npcForm.backstory.trim() || null,
       })
       .eq('id', editingNpc.id)
       .select()
@@ -1285,7 +1212,14 @@ export default function SessionView() {
     setCombatants(prev => [...prev, ...allParty].sort((a, b) => b.init - a.init));
   };
 
-  // ─── Quick NPC generator (AI-powered with template fallback) ─
+  // ─── Quick NPC generator ────────────────────────────────────
+  // Two modes:
+  //   AI on  → user types a description; AI fleshes out a full NPC.
+  //            On API failure we surface an error rather than silently
+  //            inventing fields, so the user knows AI didn't run.
+  //   AI off → manual fields. Saved exactly as typed; missing fields stay
+  //            empty. No random pool, no parser inference — what you see is
+  //            what you get.
   const generateNpc = async () => {
     if (!supabase) return;
 
@@ -1296,15 +1230,15 @@ export default function SessionView() {
       return;
     }
 
-    // If AI mode is on and the user is out of quota, open the upgrade modal
-    // instead of silently falling back to the template generator.
-    if (npcAiMode && !requireAi(
+    // Effective AI mode: only ON when both the global account toggle and the
+    // per-form toggle are on. Either off → manual.
+    const useAi = aiEnabled && npcAiMode;
+
+    if (useAi && !requireAi(
       'npc_gen',
-      "You've used your free AI NPC generation for this month. Upgrade for unlimited, or toggle AI off to use the template generator.",
+      "You've used your free AI NPC generation for this month. Upgrade for unlimited, or toggle AI off to fill in fields manually.",
       'AI-enhanced NPC generation is a Dungeon Master tier feature.'
     )) return;
-
-    setGeneratingNpc(true);
 
     const currentSession = sessionNotes.length > 0
       ? Math.max(...sessionNotes.map(n => n.session_number))
@@ -1312,44 +1246,62 @@ export default function SessionView() {
 
     let npcData = null;
 
-    // AI generation when toggle is on. Tier + quota are gated above and
-    // server-side; the template generator below is the fallback if the AI
-    // call fails for any reason (network, parse, etc).
-    if (npcAiMode) try {
-      const res = await fetch('/.netlify/functions/ai-npc-embellish', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          campaignId,
-          userEmail: user?.email,
-          npcInput: {
-            name: '',
-            role: npcPrompt.trim() || 'a random NPC the party might encounter',
-          },
-        }),
-      });
+    if (useAi) {
+      setGeneratingNpc(true);
+      try {
+        const res = await fetch('/.netlify/functions/ai-npc-embellish', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            campaignId,
+            userEmail: user?.email,
+            npcInput: {
+              name: '',
+              role: npcPrompt.trim() || 'a random NPC the party might encounter',
+            },
+          }),
+        });
 
-      if (res.ok) {
-        const { npc } = await res.json();
-        if (npc?.name) {
-          npcData = npc;
-          consumeAi('npc_gen');
+        if (!res.ok) {
+          setGeneratingNpc(false);
+          alert("Couldn't reach the AI to generate an NPC. Try again, or toggle AI Enhanced off to enter details manually.");
+          return;
         }
+        const payload = await res.json();
+        if (payload?.disabled) {
+          setGeneratingNpc(false);
+          alert('AI features are disabled in your account settings. Toggle AI Enhanced off here to enter details manually, or re-enable AI in Account.');
+          return;
+        }
+        if (!payload?.npc?.name) {
+          setGeneratingNpc(false);
+          alert("The AI response was empty or malformed. Try again, or toggle AI Enhanced off to enter details manually.");
+          return;
+        }
+        npcData = payload.npc;
+        consumeAi('npc_gen');
+      } catch (err) {
+        console.error('AI NPC generation failed:', err);
+        setGeneratingNpc(false);
+        alert("Couldn't reach the AI to generate an NPC. Try again, or toggle AI Enhanced off to enter details manually.");
+        return;
       }
-    } catch (err) {
-      console.warn('AI NPC generation failed, using template fallback:', err.message);
-    }
-
-    // Template fallback — parse user input, fill gaps with random
-    if (!npcData) {
-      const parsed = parseNpcInput(npcPrompt);
+    } else {
+      // Manual mode — require at least a name. Save exactly what was typed.
+      if (!quickNpcManual.name.trim()) {
+        alert('Name is required.');
+        return;
+      }
+      setGeneratingNpc(true);
       npcData = {
-        name: parsed.name || `${pickRandom(NPC_FIRST)} ${pickRandom(NPC_LAST)}`,
-        role: parsed.role || pickRandom(Object.values(NPC_ROLES)),
-        personality: parsed.personality || pickRandom(NPC_PERSONALITIES),
-        quirks: pickRandom(NPC_QUIRKS),
-        motivation: parsed.motivation || pickRandom(NPC_MOTIVATIONS),
-        voice_notes: pickRandom(NPC_VOICES),
+        name: quickNpcManual.name.trim(),
+        role: quickNpcManual.role.trim() || null,
+        location: quickNpcManual.location.trim() || null,
+        personality: quickNpcManual.personality.trim() || null,
+        quirks: quickNpcManual.quirks.trim() || null,
+        voice_notes: quickNpcManual.voice_notes.trim() || null,
+        motivation: quickNpcManual.motivation.trim() || null,
+        backstory: quickNpcManual.backstory.trim() || null,
       };
     }
 
@@ -1364,6 +1316,8 @@ export default function SessionView() {
         quirks: npcData.quirks || null,
         voice_notes: npcData.voice_notes || null,
         motivation: npcData.motivation || null,
+        location: npcData.location || null,
+        backstory: npcData.backstory || null,
         first_session: currentSession,
       })
       .select()
@@ -1378,6 +1332,7 @@ export default function SessionView() {
     }
 
     setNpcPrompt('');
+    setQuickNpcManual(QUICK_NPC_BLANK);
     setShowNpcGen(false);
     setGeneratingNpc(false);
   };
@@ -1963,31 +1918,104 @@ export default function SessionView() {
                     </button>
                   )}
                 </div>
-                <input
-                  type="text"
-                  value={npcPrompt}
-                  onChange={e => setNpcPrompt(e.target.value)}
-                  placeholder="a nervous shopkeeper who owes money to the thieves' guild"
-                  className="w-full px-3 py-2 bg-[rgba(15,12,8,0.50)] border border-domain-panel-border/40 rounded-lg text-domain-text placeholder-domain-text-dim/60 focus:border-eg4h-gold-dark focus:outline-none font-crimson text-sm"
-                  autoFocus
-                />
-                <p className="text-[10px] font-ui mt-1 mb-2" style={{ color: npcAiMode ? 'rgba(212,160,23,0.6)' : 'rgba(255,255,255,0.25)' }}>
-                  {npcAiMode ? 'AI will embellish your description' : 'Exact details only — no AI embellishment'}
-                  {npcAiMode && quotaEnforced && tier === 'free' && limits?.aiNpcGenQuota > 0 && (
-                    <span className="ml-2 text-domain-text-dim/60">
-                      ({aiRemaining('npc_gen')} of {limits.aiNpcGenQuota} remaining this month)
-                    </span>
-                  )}
-                </p>
-                <div className="flex gap-2">
+                {(aiEnabled && npcAiMode) ? (
+                  <>
+                    <input
+                      type="text"
+                      value={npcPrompt}
+                      onChange={e => setNpcPrompt(e.target.value)}
+                      placeholder="a nervous shopkeeper who owes money to the thieves' guild"
+                      className="w-full px-3 py-2 bg-[rgba(15,12,8,0.50)] border border-domain-panel-border/40 rounded-lg text-domain-text placeholder-domain-text-dim/60 focus:border-eg4h-gold-dark focus:outline-none font-crimson text-sm"
+                      autoFocus
+                    />
+                    <p className="text-[10px] font-ui mt-1 mb-2" style={{ color: 'rgba(212,160,23,0.6)' }}>
+                      AI will embellish your description
+                      {quotaEnforced && tier === 'free' && limits?.aiNpcGenQuota > 0 && (
+                        <span className="ml-2 text-domain-text-dim/60">
+                          ({aiRemaining('npc_gen')} of {limits.aiNpcGenQuota} remaining this month)
+                        </span>
+                      )}
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-[10px] font-ui mb-2" style={{ color: 'rgba(255,255,255,0.35)' }}>
+                      Manual entry — saved exactly as typed. Leave any field blank to skip it.
+                    </p>
+                    <div className="space-y-2">
+                      <input
+                        type="text"
+                        value={quickNpcManual.name}
+                        onChange={e => setQuickNpcManual(p => ({ ...p, name: e.target.value }))}
+                        placeholder="Name *"
+                        className="w-full px-3 py-2 bg-[rgba(15,12,8,0.50)] border border-domain-panel-border/40 rounded-lg text-domain-text placeholder-domain-text-dim/60 focus:border-eg4h-gold-dark focus:outline-none font-crimson text-sm"
+                        autoFocus
+                      />
+                      <div className="grid grid-cols-2 gap-2">
+                        <input
+                          type="text"
+                          value={quickNpcManual.role}
+                          onChange={e => setQuickNpcManual(p => ({ ...p, role: e.target.value }))}
+                          placeholder="Role"
+                          className="w-full px-3 py-2 bg-[rgba(15,12,8,0.50)] border border-domain-panel-border/40 rounded-lg text-domain-text placeholder-domain-text-dim/60 focus:border-eg4h-gold-dark focus:outline-none font-crimson text-sm"
+                        />
+                        <input
+                          type="text"
+                          value={quickNpcManual.location}
+                          onChange={e => setQuickNpcManual(p => ({ ...p, location: e.target.value }))}
+                          placeholder="Location"
+                          className="w-full px-3 py-2 bg-[rgba(15,12,8,0.50)] border border-domain-panel-border/40 rounded-lg text-domain-text placeholder-domain-text-dim/60 focus:border-eg4h-gold-dark focus:outline-none font-crimson text-sm"
+                        />
+                      </div>
+                      <textarea
+                        value={quickNpcManual.personality}
+                        onChange={e => setQuickNpcManual(p => ({ ...p, personality: e.target.value }))}
+                        placeholder="Personality"
+                        rows={2}
+                        className="w-full px-3 py-2 bg-[rgba(15,12,8,0.50)] border border-domain-panel-border/40 rounded-lg text-domain-text placeholder-domain-text-dim/60 focus:border-eg4h-gold-dark focus:outline-none font-crimson text-sm resize-none"
+                      />
+                      <div className="grid grid-cols-2 gap-2">
+                        <input
+                          type="text"
+                          value={quickNpcManual.quirks}
+                          onChange={e => setQuickNpcManual(p => ({ ...p, quirks: e.target.value }))}
+                          placeholder="Quirks"
+                          className="w-full px-3 py-2 bg-[rgba(15,12,8,0.50)] border border-domain-panel-border/40 rounded-lg text-domain-text placeholder-domain-text-dim/60 focus:border-eg4h-gold-dark focus:outline-none font-crimson text-sm"
+                        />
+                        <input
+                          type="text"
+                          value={quickNpcManual.voice_notes}
+                          onChange={e => setQuickNpcManual(p => ({ ...p, voice_notes: e.target.value }))}
+                          placeholder="Voice notes"
+                          className="w-full px-3 py-2 bg-[rgba(15,12,8,0.50)] border border-domain-panel-border/40 rounded-lg text-domain-text placeholder-domain-text-dim/60 focus:border-eg4h-gold-dark focus:outline-none font-crimson text-sm"
+                        />
+                      </div>
+                      <input
+                        type="text"
+                        value={quickNpcManual.motivation}
+                        onChange={e => setQuickNpcManual(p => ({ ...p, motivation: e.target.value }))}
+                        placeholder="Motivation / Goal"
+                        className="w-full px-3 py-2 bg-[rgba(15,12,8,0.50)] border border-domain-panel-border/40 rounded-lg text-domain-text placeholder-domain-text-dim/60 focus:border-eg4h-gold-dark focus:outline-none font-crimson text-sm"
+                      />
+                      <textarea
+                        value={quickNpcManual.backstory}
+                        onChange={e => setQuickNpcManual(p => ({ ...p, backstory: e.target.value }))}
+                        placeholder="Backstory"
+                        rows={2}
+                        className="w-full px-3 py-2 bg-[rgba(15,12,8,0.50)] border border-domain-panel-border/40 rounded-lg text-domain-text placeholder-domain-text-dim/60 focus:border-eg4h-gold-dark focus:outline-none font-crimson text-sm resize-none"
+                      />
+                    </div>
+                  </>
+                )}
+                <div className="flex gap-2 mt-2">
                   <button
                     onClick={generateNpc}
-                    disabled={generatingNpc}
+                    disabled={generatingNpc || (!(aiEnabled && npcAiMode) && !quickNpcManual.name.trim())}
                     className="px-4 py-1.5 text-xs font-cinzel font-semibold text-eg4h-black bg-gradient-to-r from-eg4h-gold to-eg4h-gold-light rounded disabled:opacity-40 disabled:cursor-not-allowed hover:shadow-[0_2px_8px_rgba(255,215,0,0.3)] transition-all cursor-pointer"
                   >
-                    {generatingNpc ? 'Generating...' : 'Generate'}
+                    {generatingNpc ? 'Generating...' : ((aiEnabled && npcAiMode) ? 'Generate' : 'Save')}
                   </button>
-                  <button onClick={() => { setShowNpcGen(false); setNpcPrompt(''); }} className="px-3 py-1.5 text-xs font-ui text-domain-text-dim hover:text-domain-text cursor-pointer">
+                  <button onClick={() => { setShowNpcGen(false); setNpcPrompt(''); setQuickNpcManual(QUICK_NPC_BLANK); }} className="px-3 py-1.5 text-xs font-ui text-domain-text-dim hover:text-domain-text cursor-pointer">
                     Cancel
                   </button>
                 </div>
@@ -2062,6 +2090,9 @@ export default function SessionView() {
                   <div className="relative">
                     <input type="text" placeholder="Motivation / Goal" value={npcForm.motivation} onChange={e => { setNpcForm(p => ({ ...p, motivation: e.target.value })); setAiEmbellishedFields(f => f.filter(k => k !== 'motivation')); }} className={fieldCls('motivation')} />
                     <span className="absolute right-2 top-2.5"><AiBadge field="motivation" /></span>
+                  </div>
+                  <div className="relative">
+                    <textarea placeholder="Backstory" value={npcForm.backstory} onChange={e => { setNpcForm(p => ({ ...p, backstory: e.target.value })); }} rows={2} className={`${npcFieldClass} resize-none`} />
                   </div>
                   <div className="flex gap-2 pt-1">
                     {embellishMode && (
@@ -2200,6 +2231,7 @@ export default function SessionView() {
                 {npc.personality && <p className="text-xs font-crimson text-domain-text-dim/70 mt-1 italic line-clamp-2">{npc.personality}</p>}
                 {npc.quirks && <p className="text-xs font-crimson text-domain-text-dim/60 mt-0.5">Quirk: {npc.quirks}</p>}
                 {npc.voice_notes && <p className="text-xs font-crimson text-domain-text-dim/60 mt-0.5">Voice: {npc.voice_notes}</p>}
+                {npc.backstory && <p className="text-xs font-crimson text-domain-text-dim/60 mt-0.5 line-clamp-3">Backstory: {npc.backstory}</p>}
                   </div>{/* close flex-1 */}
                 </div>{/* close flex row */}
               </Card>

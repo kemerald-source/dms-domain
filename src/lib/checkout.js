@@ -48,7 +48,10 @@ export async function openCustomerPortal(email) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         email,
-        returnUrl: `${window.location.origin}/dashboard`,
+        // ?portal=return so Dashboard knows to clear the tier cache + reload
+        // — otherwise plan changes made in the Stripe portal don't show until
+        // sessionStorage's cache TTL expires.
+        returnUrl: `${window.location.origin}/dashboard?portal=return`,
       }),
     });
     const data = await res.json();

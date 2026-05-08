@@ -97,13 +97,18 @@ export default function Dashboard() {
     }
   }, [authLoading, isAuthenticated, navigate]);
 
-  // Clear tier cache after Stripe checkout so tier refreshes immediately
+  // After Stripe checkout success or a billing-portal return, the user's
+  // subscription may have changed. Clear the in-memory tier cache and force a
+  // full reload so useTier refetches from /check-tier and the UI shows the
+  // new tier without requiring a manual refresh.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get('checkout') === 'success' && user?.email) {
+    const isCheckoutSuccess = params.get('checkout') === 'success';
+    const isPortalReturn = params.get('portal') === 'return';
+    if ((isCheckoutSuccess || isPortalReturn) && user?.email) {
       sessionStorage.removeItem(`dmd-tier-${user.email.toLowerCase()}`);
-      // Clean up URL
       window.history.replaceState({}, '', '/dashboard');
+      window.location.reload();
     }
   }, [user?.email]);
 
